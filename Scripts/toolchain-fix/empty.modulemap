@@ -1,0 +1,4 @@
+// Intentionally empty. Shadows a stale
+// /Library/Developer/CommandLineTools/usr/include/swift/module.modulemap
+// left behind by an older Command Line Tools install, which would otherwise
+// redefine module 'SwiftBridging' (already defined by bridging.modulemap).
