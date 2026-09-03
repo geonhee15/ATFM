@@ -8,6 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var bubble: BubblePanelController?
     private var monitor: ClipboardMonitor?
     private var viewModel: ClipboardViewModel?
+    private let appState = AppState()
+    private let identityResolver = ProcessIdentityResolver()
+    private var systemMonitor: SystemMonitor?
+    private var networkMonitor: NetworkMonitor?
+    private let speedTester = SpeedTester()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -33,20 +38,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         statusItem = item
 
-        let root = RootView(viewModel: vm, quit: { NSApp.terminate(nil) })
+        let systemMonitor = SystemMonitor(resolver: identityResolver)
+        let networkMonitor = NetworkMonitor(resolver: identityResolver)
+        self.systemMonitor = systemMonitor
+        self.networkMonitor = networkMonitor
+        appState.systemMonitor = systemMonitor
+        appState.networkMonitor = networkMonitor
+
+        let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
+                            networkMonitor: networkMonitor, speedTester: speedTester,
+                            quit: { NSApp.terminate(nil) })
+        let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
         let bubble = BubblePanelController(
-            size: NSSize(width: 372, height: 640),
+            size: NSSize(width: 372, height: panelHeight),
             content: root,
             anchorProvider: { [weak self] in self?.statusItemScreenRect() }
         )
         bubble.onVisibilityChanged = { [weak self] visible in
             self?.statusItem?.button?.highlight(visible)
+            self?.appState.setBubbleVisible(visible)
             if visible { vm.presentationCount += 1 }
         }
         vm.onRequestKeyboardReturn = { [weak bubble] in bubble?.returnKeyboardFocus() }
         self.bubble = bubble
 
         let env = ProcessInfo.processInfo.environment
+        if let tabName = env["ATFM_TAB"], let initial = AppTab(rawValue: tabName) {
+            appState.select(initial)
+        }
         if env["ATFM_AUTO_SHOW"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 MainActor.assumeIsolated { self.bubble?.show() }
@@ -54,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Debug helper: ATFM_SNAPSHOT=/path/out.png writes a PNG of the bubble (own-window capture).
         if let snapshotPath = env["ATFM_SNAPSHOT"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            let delay = Double(env["ATFM_SNAPSHOT_DELAY"] ?? "") ?? 2.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 MainActor.assumeIsolated { self.bubble?.writeSnapshot(to: snapshotPath) }
             }
         }
@@ -62,6 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         monitor?.stop()
+        systemMonitor?.setActive(false)
+        networkMonitor?.setActive(false)
     }
 
     private func statusItemScreenRect() -> CGRect? {

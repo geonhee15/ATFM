@@ -2,6 +2,8 @@ import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
     case clipboard
+    case system
+    case network
     case settings
 
     var id: String { rawValue }
@@ -9,6 +11,8 @@ enum AppTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .clipboard: return "doc.on.clipboard"
+        case .system: return "cpu"
+        case .network: return "network"
         case .settings: return "gearshape"
         }
     }
@@ -16,15 +20,24 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .clipboard: return "클립보드"
+        case .system: return "시스템"
+        case .network: return "네트워크"
         case .settings: return "설정"
         }
     }
 }
 
 struct RootView: View {
+    @Bindable var appState: AppState
     @Bindable var viewModel: ClipboardViewModel
+    var systemMonitor: SystemMonitor
+    var networkMonitor: NetworkMonitor
+    var speedTester: SpeedTester
     var quit: () -> Void
-    @State private var tab: AppTab = .clipboard
+
+    private var tab: Binding<AppTab> {
+        Binding(get: { appState.tab }, set: { appState.select($0) })
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,13 +47,17 @@ struct RootView: View {
                 .padding(.top, 22)
                 .padding(.bottom, 16)
 
-            TabBar(selection: $tab)
+            TabBar(selection: tab)
                 .padding(.horizontal, 20)
 
             ZStack {
-                switch tab {
+                switch appState.tab {
                 case .clipboard:
                     ClipboardView(vm: viewModel)
+                case .system:
+                    SystemView(monitor: systemMonitor)
+                case .network:
+                    NetworkView(monitor: networkMonitor, tester: speedTester)
                 case .settings:
                     SettingsView(vm: viewModel)
                 }
@@ -50,11 +67,11 @@ struct RootView: View {
 
             HStack(spacing: 12) {
                 BottomButton(
-                    title: tab == .settings ? "클립보드" : "설정",
-                    icon: tab == .settings ? "doc.on.clipboard" : "gearshape"
+                    title: appState.tab == .settings ? appState.lastContentTab.title : "설정",
+                    icon: appState.tab == .settings ? appState.lastContentTab.icon : "gearshape"
                 ) {
                     withAnimation(.snappy(duration: 0.2)) {
-                        tab = tab == .settings ? .clipboard : .settings
+                        appState.select(appState.tab == .settings ? appState.lastContentTab : .settings)
                     }
                 }
                 BottomButton(title: "종료", icon: "power", action: quit)

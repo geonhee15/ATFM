@@ -17,6 +17,15 @@
   - 삭제: 하나씩(hover 후 ✕), 선택해서 여러 개, 전체 삭제
   - 암호 관리자에서 복사한 비밀 값(`org.nspasteboard.ConcealedType`)은 기록하지 않음
 - 설정: 최대 보관 개수, 중복 항목 위로 올리기, 이미지/파일 저장 여부, 로그인 시 자동 실행
+- **시스템** 탭
+  - CPU(코어별 포함) · GPU · 배터리 사용량과 최근 1분 추이
+  - CPU / 배터리 온도 (Apple Silicon 내부 센서, 권한 불필요)
+  - **앱별 사용량**: 헬퍼 프로세스를 부모 앱으로 묶어서(Activity Monitor 방식) CPU · 메모리 순으로 표시
+  - 메모리 압력, 앱/사용 중/압축/캐시/스왑 분해, 가동 시간
+- **네트워크** 탭
+  - 현재 다운로드/업로드 속도와 추이, 인터페이스 · IP, 세션 누적량
+  - **앱별 사용량**: `nettop` 을 스트리밍해서 2초마다 앱별 ↓↑ 속도 표시
+  - 속도 측정: Cloudflare 서버로 다운로드/업로드 Mbps 와 지연 시간 측정 (버튼을 눌렀을 때만)
 
 데이터는 `~/Library/Application Support/ATFM/clipboard.sqlite` 에 SQLite로 저장됩니다.
 
@@ -38,10 +47,16 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | 변수 | 동작 |
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
-| `ATFM_SNAPSHOT=/path/out.png` | 2초 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `system` · `network` · `settings`) |
+| `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
+
+`Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.
+`ATFM --probe` 는 센서 · GPU · 메모리 · 앱별 사용량 샘플을 터미널에 출력합니다.
 
 ```bash
-ATFM_AUTO_SHOW=1 ATFM_SNAPSHOT=$PWD/build/snapshot.png open -n build/ATFM.app
+Scripts/dev-run.sh network
 ```
 
 ## 구조
@@ -50,7 +65,9 @@ ATFM_AUTO_SHOW=1 ATFM_SNAPSHOT=$PWD/build/snapshot.png open -n build/ATFM.app
 Sources/ATFM
 ├── App/         진입점, 메뉴 막대 아이템, 말풍선 패널(NSPanel + NSVisualEffectView)
 ├── Clipboard/   모델, SQLite 저장소, 페이스트보드 감시, 뷰모델
-├── UI/          SwiftUI 화면 (루트/탭바, 클립보드 목록, 설정)
+├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
+├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
+├── UI/          SwiftUI 화면 (루트/탭바, 클립보드, 시스템, 네트워크, 설정)
 └── Support/     설정 키, 앱 아이콘 캐시
 ```
 
