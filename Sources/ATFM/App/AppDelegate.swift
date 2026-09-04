@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var networkMonitor: NetworkMonitor?
     private let speedTester = SpeedTester()
     private let quickActions = QuickActions()
+    private var checklist: ChecklistStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -47,9 +48,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.networkMonitor = networkMonitor
         appState.quickActions = quickActions
 
+        let checklist = ChecklistStore(directory: store.directory)
+        self.checklist = checklist
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, quit: { NSApp.terminate(nil) })
+                            quickActions: quickActions, checklist: checklist,
+                            quit: { NSApp.terminate(nil) })
         let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
         let bubble = BubblePanelController(
             size: NSSize(width: 372, height: panelHeight),

@@ -2,6 +2,7 @@ import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
     case clipboard
+    case checklist
     case system
     case network
     case actions
@@ -12,6 +13,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .clipboard: return "doc.on.clipboard"
+        case .checklist: return "checklist"
         case .system: return "cpu"
         case .network: return "network"
         case .actions: return "bolt"
@@ -22,6 +24,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .clipboard: return "클립보드"
+        case .checklist: return "체크리스트"
         case .system: return "시스템"
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
@@ -37,6 +40,7 @@ struct RootView: View {
     var networkMonitor: NetworkMonitor
     var speedTester: SpeedTester
     var quickActions: QuickActions
+    var checklist: ChecklistStore
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -58,6 +62,8 @@ struct RootView: View {
                 switch appState.tab {
                 case .clipboard:
                     ClipboardView(vm: viewModel)
+                case .checklist:
+                    ChecklistView(store: checklist)
                 case .system:
                     SystemView(monitor: systemMonitor)
                 case .network:

@@ -17,6 +17,8 @@
   - 삭제: 하나씩(hover 후 ✕), 선택해서 여러 개, 전체 삭제
   - 암호 관리자에서 복사한 비밀 값(`org.nspasteboard.ConcealedType`)은 기록하지 않음
 - 설정: 최대 보관 개수, 중복 항목 위로 올리기, 이미지/파일 저장 여부, 로그인 시 자동 실행
+- **체크리스트** 탭: 적고 Enter로 추가, 체크로 완료, 더블클릭 수정, 호버 ✕ 삭제, 완료 항목 접기/한 번에 지우기.
+  `~/Library/Application Support/ATFM/checklist.json` 에 자동 저장
 - **시스템** 탭
   - CPU(코어별 포함) · GPU · 배터리 사용량과 최근 1분 추이
   - CPU / 배터리 온도 (Apple Silicon 내부 센서, 권한 불필요)
@@ -55,7 +57,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `system` · `network` · `actions` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `system` · `network` · `actions` · `settings`) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
 
 `Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.
@@ -71,10 +73,11 @@ Scripts/dev-run.sh network
 Sources/ATFM
 ├── App/         진입점, 메뉴 막대 아이템, 말풍선 패널(NSPanel + NSVisualEffectView)
 ├── Clipboard/   모델, SQLite 저장소, 페이스트보드 감시, 뷰모델
+├── Checklist/   체크리스트 저장소 (JSON)
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
-├── UI/          SwiftUI 화면 (루트/탭바, 클립보드, 시스템, 네트워크, 빠른 동작, 설정)
+├── UI/          SwiftUI 화면 (루트/탭바, 클립보드, 체크리스트, 시스템, 네트워크, 빠른 동작, 설정)
 └── Support/     설정 키, 앱 아이콘 캐시
 ```
 
