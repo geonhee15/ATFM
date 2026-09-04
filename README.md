@@ -47,6 +47,7 @@
   - ✕를 누르면 ATFM에서 다시 켤 때까지 숨김. 표시할 소스(Spotify 앱만 / + 브라우저 / 모든 앱), 일시정지 표시, 위치 설정
   - 🎤 버튼으로 아래에 **가사** 박스 펼치기: LRCLIB(무료, 키 불필요)에서 찾아 타임라인 싱크가 있으면 현재 줄을 강조하며
     자동 스크롤(줄 클릭 → 그 위치로 이동), 없으면 일반 가사. 결과는 `Application Support/ATFM/lyrics/`에 캐시
+  - 싱크 보정: −/+ 버튼으로 0.5초 단위 누적 조정, 값을 누르면 0으로. 곡별로 기억
   - macOS의 Now Playing(MediaRemote)은 일반 앱에 정보를 주지 않아서, Apple 서명 `perl`이 작은 브리지
     (`ATFMMediaRemote.dylib` + `mediaremote.pl`)를 로드해 JSON으로 중계합니다. 권한 요청 없음
 - **간편 AI** 탭: Gemini 미니 채팅. API 키를 한 번 넣으면 스트리밍으로 답하고, 모델 목록 불러오기/선택

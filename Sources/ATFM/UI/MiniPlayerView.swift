@@ -90,13 +90,49 @@ struct LyricsBox: View {
                         .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                 }
                 Spacer()
-                Text(lyrics.lyrics?.source ?? "LRCLIB").font(.system(size: 9)).foregroundStyle(.tertiary)
+                if lyrics.lyrics?.isSynced == true {
+                    offsetControls
+                } else {
+                    Text(lyrics.lyrics?.source ?? "LRCLIB").font(.system(size: 9)).foregroundStyle(.tertiary)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 8)
             .padding(.bottom, 4)
             content
         }
+    }
+
+    /// −0.5 / +0.5 second nudges; tap the value to reset. Remembered per song.
+    private var offsetControls: some View {
+        HStack(spacing: 2) {
+            nudgeButton("minus", help: "가사를 0.5초 늦게") { lyrics.adjustOffset(by: -LyricsController.offsetStep) }
+            Button { lyrics.resetOffset() } label: {
+                Text(lyrics.offsetLabel)
+                    .font(.system(size: 10, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(lyrics.offset == 0 ? Color.secondary : Color.accentColor)
+                    .frame(minWidth: 38)
+            }
+            .buttonStyle(.plain)
+            .help("싱크 보정값 (누르면 0으로)")
+            nudgeButton("plus", help: "가사를 0.5초 빨리") { lyrics.adjustOffset(by: LyricsController.offsetStep) }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Theme.chipFill(scheme)))
+    }
+
+    private func nudgeButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     @ViewBuilder

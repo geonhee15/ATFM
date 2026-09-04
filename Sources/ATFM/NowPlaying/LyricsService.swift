@@ -155,17 +155,50 @@ enum LyricsError: LocalizedError {
 @Observable
 final class LyricsController {
     private(set) var state: LyricsState = .idle
+    /// Per-track sync correction in seconds; positive shows lines earlier.
+    private(set) var offset: Double = 0
     /// Fetch automatically whenever the track changes (true while the lyrics box is open).
     var autoFetch = false { didSet { if autoFetch { ensureLoaded() } } }
 
     let monitor: NowPlayingMonitor
     @ObservationIgnored private var trackKey = ""
     @ObservationIgnored private var memory: [String: LyricsState] = [:]
+    @ObservationIgnored private var offsets: [String: Double]
     @ObservationIgnored private var task: Task<Void, Never>?
+    private static let offsetsKey = "lyricsOffsets"
+    static let offsetStep = 0.5
 
     init(monitor: NowPlayingMonitor) {
         self.monitor = monitor
+        offsets = (UserDefaults.standard.dictionary(forKey: Self.offsetsKey) as? [String: Double]) ?? [:]
+        if let track = monitor.track {
+            trackKey = "\(track.title)|\(track.artist)|\(Int(track.duration.rounded()))".lowercased()
+            offset = offsets[trackKey] ?? 0
+        }
         observe()
+    }
+
+    // MARK: Sync offset
+
+    var offsetLabel: String {
+        offset == 0 ? "0.0s" : String(format: "%@%.1fs", offset > 0 ? "+" : "−", abs(offset))
+    }
+
+    func adjustOffset(by delta: Double) {
+        setOffset(offset + delta)
+    }
+
+    func resetOffset() { setOffset(0) }
+
+    private func setOffset(_ value: Double) {
+        let rounded = (value / Self.offsetStep).rounded() * Self.offsetStep
+        offset = max(-30, min(30, rounded))
+        guard !trackKey.isEmpty else { return }
+        if offset == 0 { offsets[trackKey] = nil } else { offsets[trackKey] = offset }
+        if offsets.count > 300 {   // keep the map small; drop arbitrary extras
+            for key in offsets.keys.prefix(offsets.count - 300) { offsets[key] = nil }
+        }
+        UserDefaults.standard.set(offsets, forKey: Self.offsetsKey)
     }
 
     private func observe() {
@@ -194,6 +227,7 @@ final class LyricsController {
         let newKey = key(for: track)
         guard newKey != trackKey else { return }
         trackKey = newKey
+        offset = offsets[newKey] ?? 0
         task?.cancel()
         state = memory[newKey] ?? .idle
         if autoFetch { ensureLoaded() }
@@ -202,7 +236,11 @@ final class LyricsController {
     func ensureLoaded() {
         guard let track = monitor.track else { return }
         let currentKey = key(for: track)
-        if trackKey != currentKey { trackKey = currentKey; state = memory[currentKey] ?? .idle }
+        if trackKey != currentKey {
+            trackKey = currentKey
+            offset = offsets[currentKey] ?? 0
+            state = memory[currentKey] ?? .idle
+        }
         if case .idle = state {} else { return }
         state = .loading
         task?.cancel()
@@ -233,13 +271,13 @@ final class LyricsController {
 
     func currentLineIndex(at now: Date) -> Int? {
         guard let lines = lyrics?.synced, !lines.isEmpty, let track = monitor.track else { return nil }
-        let elapsed = track.currentElapsed(at: now)
+        let elapsed = track.currentElapsed(at: now) + offset
         var index: Int?
         for line in lines where line.time <= elapsed { index = line.id }
         return index
     }
 
     func seek(to line: LyricLine) {
-        monitor.seek(to: line.time)
+        monitor.seek(to: max(0, line.time - offset))
     }
 }
