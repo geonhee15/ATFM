@@ -57,17 +57,46 @@ enum Probe {
             }
             do {
                 var received = ""
-                for try await chunk in GeminiAPI.stream(apiKey: "invalid-key-for-probe", model: "gemini-2.5-flash",
-                                                        history: [ChatMessage(id: UUID(), role: .user, text: "hi", date: Date())]) {
-                    received += chunk
+                for try await event in GeminiAPI.stream(apiKey: "invalid-key-for-probe", model: "gemini-2.5-flash",
+                                                        history: [ChatMessage(id: UUID(), role: .user, text: "hi", date: Date())],
+                                                        useSearch: false) {
+                    if case .text(let chunk) = event { received += chunk }
                 }
                 print("gemini probe: unexpected success \(received.prefix(40))")
             } catch {
                 print("gemini probe (invalid key → expected error): \(error.localizedDescription)")
             }
+            // With a stored key (ATFM_PROBE_LIVE=1): list models, pick one, ask a grounded question.
+            if ProcessInfo.processInfo.environment["ATFM_PROBE_LIVE"] == "1",
+               let key = UserDefaults.standard.string(forKey: "geminiAPIKey"), !key.isEmpty {
+                do {
+                    let models = try await GeminiAPI.listModels(apiKey: key)
+                    log("live models (\(models.count)): \(models.joined(separator: ", "))")
+                    let saved = UserDefaults.standard.string(forKey: "geminiModel") ?? "-"
+                    let env = ProcessInfo.processInfo.environment
+                    let pick = env["ATFM_PROBE_MODEL"] ?? (models.contains(saved) ? saved : (GeminiChat.bestModel(from: models) ?? saved))
+                    let search = env["ATFM_PROBE_SEARCH"] != "0"
+                    log("live model: saved=\(saved) using=\(pick) search=\(search) best=\(GeminiChat.bestModel(from: models) ?? "-")")
+                    let prompt = ProcessInfo.processInfo.environment["ATFM_PROBE_PROMPT"] ?? "내일 인천 날씨 어때? 두 문장으로."
+                    var answer = ""
+                    var sources: [WebSource] = []
+                    for try await event in GeminiAPI.stream(apiKey: key, model: pick,
+                                                            history: [ChatMessage(id: UUID(), role: .user, text: prompt, date: Date())],
+                                                            useSearch: search) {
+                        switch event {
+                        case .text(let t): answer += t
+                        case .sources(let s): sources += s
+                        }
+                    }
+                    log("live answer: \(answer.replacingOccurrences(of: "\n", with: " ").prefix(300))")
+                    log("live sources: \(sources.map(\.title).prefix(5))")
+                } catch {
+                    log("live error: \(error.localizedDescription)")
+                }
+            }
             semaphore.signal()
         }
-        _ = semaphore.wait(timeout: .now() + 40)
+        _ = semaphore.wait(timeout: .now() + 90)
         let handle = dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_NOW)
         print("corebrightness dlopen: \(handle != nil) \(handle == nil ? String(cString: dlerror()) : "")")
         if let cls = NSClassFromString("KeyboardBrightnessClient") as? NSObject.Type {

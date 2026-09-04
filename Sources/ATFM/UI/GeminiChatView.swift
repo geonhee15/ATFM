@@ -13,6 +13,7 @@ struct GeminiChatView: View {
             if chat.showKeyEditor { keyCard }
             if confirmDeleteAll { deleteAllBar }
             messagesArea
+            if let notice = chat.noticeText { noticeBar(notice) }
             if let error = chat.errorText { errorBar(error) }
             inputBar
         }
@@ -57,6 +58,8 @@ struct GeminiChatView: View {
                 chat.refreshModels()
             } label: { Label(chat.isLoadingModels ? "모델 목록 불러오는 중…" : "모델 목록 새로고침", systemImage: "arrow.clockwise") }
             .disabled(!chat.hasAPIKey || chat.isLoadingModels)
+            Divider()
+            Toggle("웹 검색(Google) 사용", isOn: Binding(get: { chat.useSearch }, set: { chat.setUseSearch($0) }))
             Divider()
             if !chat.sortedConversations.isEmpty {
                 Menu("대화 기록 (\(chat.conversations.count)/\(GeminiChat.maxConversations))") {
@@ -201,13 +204,30 @@ struct GeminiChatView: View {
             Text("Gemini에게 물어보세요")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("Return 전송 · ⌥Return 줄바꿈 · 대화는 최근 \(GeminiChat.maxConversations)개까지 보관")
+            Text("Return 전송 · ⌥Return 줄바꿈 · 대화는 최근 \(GeminiChat.maxConversations)개까지 보관" + (chat.useSearch ? "\n웹 검색이 켜져 있어 날씨·뉴스 같은 최신 정보도 답해요" : ""))
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    private func noticeBar(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle.fill").foregroundStyle(Color.accentColor)
+            Text(text).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3)
+            Spacer()
+            Button {
+                chat.noticeText = nil
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .card(radius: 10)
     }
 
     private func errorBar(_ text: String) -> some View {
@@ -306,10 +326,18 @@ struct MessageBubble: View {
                         Text("생각 중…").font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                 } else {
-                    Text(attributed)
-                        .font(.system(size: 13))
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(MarkdownLite.render(message.text))
+                            .font(.system(size: 13))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let sources = message.sources, !sources.isEmpty {
+                            Text(MarkdownLite.sourcesLine(sources))
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -318,9 +346,4 @@ struct MessageBubble: View {
         }
     }
 
-    private var attributed: AttributedString {
-        (try? AttributedString(markdown: message.text,
-                               options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(message.text)
-    }
 }
