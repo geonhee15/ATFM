@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var checklist: ChecklistStore?
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
+    private let converter = FileConverter()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -63,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
-                            keepAwake: keepAwake, gemini: gemini,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter,
                             quit: { NSApp.terminate(nil) })
         let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
         let bubble = BubblePanelController(
@@ -96,6 +97,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if let files = env["ATFM_DEBUG_CONVERT_FILES"], !files.isEmpty {
+            converter.add(urls: files.split(separator: ":").map { URL(fileURLWithPath: String($0)) })
+            if env["ATFM_DEBUG_CONVERT_RUN"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    MainActor.assumeIsolated { self.converter.run() }
+                }
+            }
+        }
         if env["ATFM_AUTO_SHOW"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 MainActor.assumeIsolated { self.bubble?.show() }
@@ -115,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         systemMonitor?.setActive(false)
         networkMonitor?.setActive(false)
         keepAwake.setActive(false)
+        converter.cancel()
     }
 
     private func statusItemScreenRect() -> CGRect? {

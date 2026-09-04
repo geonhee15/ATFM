@@ -36,6 +36,12 @@
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
   - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
+- **파일 변환** 탭: 파일을 끌어다 놓거나 골라서 한 번에 변환
+  - 이미지 → PNG · JPEG · HEIC · AVIF · TIFF · GIF · BMP (품질 슬라이더, 최대 크기 축소, 회전 정보 반영). macOS ImageIO 사용
+  - 영상 → MP4/MOV (H.264 · HEVC, 하드웨어 인코딩) · MKV · WebM(VP9) · 움직이는 GIF, 해상도/화질 선택, 영상에서 오디오만 추출
+  - 오디오 → MP3 · M4A(AAC) · WAV · FLAC · AIFF · OGG(Opus), 비트레이트 선택
+  - 영상·오디오는 Homebrew `ffmpeg`(`/opt/homebrew/bin` 또는 `/usr/local/bin`)를 쓰고, 없으면 AVFoundation으로 MP4/MOV/M4A만 지원
+  - 저장 위치: 원본 폴더(같은 확장자면 `-변환` 붙임) · 다운로드 · 지정 폴더, 진행률 · 중단 · Finder에서 보기
 - **간편 AI** 탭: Gemini 미니 채팅. API 키를 한 번 넣으면 스트리밍으로 답하고, 모델 목록 불러오기/선택
   (쓸 수 없는 모델이면 계정에서 쓸 수 있는 flash 모델로 자동 교체), Google 검색 그라운딩 토글(기본 켜짐,
   날씨·뉴스 같은 실시간 질문에 출처와 함께 답변), 답변 복사, 대화 기록은 최근 20개까지 보관.
@@ -63,7 +69,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `ai` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `ai` · `settings`) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
 
 `Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.
@@ -82,6 +88,7 @@ Sources/ATFM
 ├── Checklist/   체크리스트 저장소 (JSON)
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
+├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐)
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)

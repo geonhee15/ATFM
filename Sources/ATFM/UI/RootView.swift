@@ -7,6 +7,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case system
     case network
     case actions
+    case convert
     case ai
     case settings
 
@@ -20,6 +21,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "cpu"
         case .network: return "network"
         case .actions: return "bolt"
+        case .convert: return "arrow.triangle.2.circlepath"
         case .ai: return "bubble.left.and.text.bubble.right"
         case .settings: return "gearshape"
         }
@@ -33,6 +35,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "시스템"
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
+        case .convert: return "파일 변환"
         case .ai: return "간편 AI"
         case .settings: return "설정"
         }
@@ -49,6 +52,7 @@ struct RootView: View {
     var checklist: ChecklistStore
     var keepAwake: KeepAwake
     var gemini: GeminiChat
+    var converter: FileConverter
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -80,6 +84,8 @@ struct RootView: View {
                     NetworkView(monitor: networkMonitor, tester: speedTester)
                 case .actions:
                     QuickActionsView(appState: appState, quick: quickActions)
+                case .convert:
+                    ConvertView(converter: converter)
                 case .ai:
                     GeminiChatView(chat: gemini)
                 case .settings:

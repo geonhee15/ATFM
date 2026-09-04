@@ -2,6 +2,44 @@ import AppKit
 
 /// `ATFM --probe` prints what the system/network samplers can see on this Mac. Debug aid only.
 enum Probe {
+    /// ATFM_PROBE_CONVERT=<dir> converts test.png / test.mp4 / test.wav found in <dir> through every engine path.
+    static func probeConversions(in dir: URL) {
+        let ffmpeg = FFmpegConverter.locate()
+        print("convert engine: \(ffmpeg?.versionString ?? "builtin") writable images: \(OutputFormat.image.map(\.id))")
+        let png = dir.appendingPathComponent("test.png")
+        for format in OutputFormat.image where format.id != "png" {
+            let out = dir.appendingPathComponent("out-image.\(format.ext)")
+            do {
+                try ImageConverter.convert(input: png, output: out, format: format, quality: 0.8, maxPixelSize: 256)
+                let size = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int) ?? 0
+                print("  image → \(format.id): ok \(size) bytes")
+            } catch { print("  image → \(format.id): FAIL \(error.localizedDescription)") }
+        }
+        guard let ffmpeg else { print("  (no ffmpeg; skipping video/audio)"); return }
+        let jobs: [(String, String)] = [("test.mp4", "mp4-hevc"), ("test.mp4", "gif-anim"), ("test.mp4", "mp3"), ("test.mp4", "webm-vp9"),
+                                        ("test.wav", "mp3"), ("test.wav", "flac"), ("test.wav", "m4a"), ("test.wav", "ogg-opus")]
+        let options = FFmpegConverter.VideoOptions(resolution: .p480, quality: .medium, audioBitrate: 192)
+        for (file, formatID) in jobs {
+            guard let format = (OutputFormat.videoFFmpeg + OutputFormat.audioFFmpeg).first(where: { $0.id == formatID }) else { continue }
+            let input = dir.appendingPathComponent(file)
+            let out = dir.appendingPathComponent("out-\(file.replacingOccurrences(of: ".", with: "-")).\(format.ext)")
+            let args = ffmpeg.arguments(input: input, output: out, format: format, video: options, audioBitrate: 192)
+            let semaphore = DispatchSemaphore(value: 0)
+            var result = "ok"
+            var lastProgress = 0.0
+            let job = FFmpegConverter.Job()
+            Task.detached {
+                do {
+                    try await ffmpeg.run(arguments: args, duration: ffmpeg.duration(of: input), job: job) { p in lastProgress = max(lastProgress, p) }
+                } catch { result = "FAIL \(error.localizedDescription)" }
+                semaphore.signal()
+            }
+            _ = semaphore.wait(timeout: .now() + 120)
+            let size = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int) ?? 0
+            print("  \(file) → \(formatID): \(result) \(size) bytes (progress seen \(Int(lastProgress * 100))%)")
+        }
+    }
+
     @MainActor
     static func run() {
         print("chip: \(CPUProbe.chipName), cores: \(CPUProbe.coreCount)")
@@ -39,6 +77,9 @@ enum Probe {
             print(String(format: "  %-28@ cpu %5.1f%%  mem %10@  energy %8@  procs %d  app=%@", a.name as NSString, a.cpuPercent, Format.memory(a.memoryBytes) as NSString, Format.milliwatts(a.energyMilliwatts) as NSString, a.processCount, (a.bundlePath != nil) ? "yes" : "no"))
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
+        if let dir = ProcessInfo.processInfo.environment["ATFM_PROBE_CONVERT"] {
+            Self.probeConversions(in: URL(fileURLWithPath: dir))
+        }
         let semaphore = DispatchSemaphore(value: 0)
         Task.detached {
             func log(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
