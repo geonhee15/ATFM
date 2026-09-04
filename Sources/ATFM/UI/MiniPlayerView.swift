@@ -89,18 +89,84 @@ struct LyricsBox: View {
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Capsule().fill(Color.accentColor.opacity(0.15)))
                 }
-                Spacer()
-                if lyrics.lyrics?.isSynced == true {
-                    offsetControls
-                } else {
-                    Text(lyrics.lyrics?.source ?? "LRCLIB").font(.system(size: 9)).foregroundStyle(.tertiary)
+                if let source = lyrics.lyrics?.source, source != "LRCLIB" {
+                    Text(source).font(.system(size: 9)).foregroundStyle(.tertiary)
                 }
+                Spacer()
+                if lyrics.lyrics?.isSynced == true, !lyrics.isEditing {
+                    offsetControls
+                }
+                lyricsMenu
             }
             .padding(.horizontal, 14)
             .padding(.top, 8)
             .padding(.bottom, 4)
-            content
+            if lyrics.isEditing { editor } else { content }
         }
+    }
+
+    private var lyricsMenu: some View {
+        Menu {
+            if lyrics.candidates.isEmpty {
+                Button {
+                    lyrics.loadCandidates()
+                } label: {
+                    Label(lyrics.isLoadingCandidates ? "후보 찾는 중…" : "다른 가사 찾기", systemImage: "magnifyingglass")
+                }
+                .disabled(lyrics.isLoadingCandidates)
+            } else {
+                Section("가사 후보 \(lyrics.candidates.count)개 · 한글·싱크·길이 일치 우선") {
+                    ForEach(lyrics.candidates) { candidate in
+                        Button {
+                            lyrics.choose(candidate)
+                        } label: {
+                            if candidate.id == lyrics.selectedCandidateID {
+                                Label(candidate.summary, systemImage: "checkmark")
+                            } else {
+                                Text(candidate.summary)
+                            }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button { lyrics.retry() } label: { Label("다시 검색", systemImage: "arrow.clockwise") }
+            Button { lyrics.beginEditing() } label: { Label("직접 입력…", systemImage: "square.and.pencil") }
+            Button { lyrics.importLRCFile() } label: { Label("LRC 파일 가져오기…", systemImage: "doc.badge.plus") }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("다른 가사 고르기 · 직접 입력")
+    }
+
+    private var editor: some View {
+        VStack(spacing: 6) {
+            TextEditor(text: Binding(get: { lyrics.draft }, set: { lyrics.draft = $0 }))
+                .font(.system(size: 12))
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.chipFill(scheme)))
+            HStack {
+                Text("[mm:ss.xx] 가사 형식이면 싱크로 표시돼요")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                Spacer()
+                Button("취소") { lyrics.isEditing = false }
+                Button("저장") { lyrics.saveDraft() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(lyrics.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
     }
 
     /// −0.5 / +0.5 second nudges; tap the value to reset. Remembered per song.

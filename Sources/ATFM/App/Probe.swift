@@ -85,10 +85,14 @@ enum Probe {
                 let duration = parts.count > 2 ? Double(parts[2]) ?? 0 : 0
                 Task.detached {
                     do {
-                        if let lyrics = try await LyricsService.fetch(title: title, artist: artist, album: "", duration: duration) {
-                            print("lyrics: synced=\(lyrics.isSynced) lines=\(lyrics.synced?.count ?? 0) plain=\(lyrics.plain?.count ?? 0) chars")
-                            for line in (lyrics.synced ?? []).prefix(4) { print(String(format: "  [%6.2f] %@", line.time, line.text as NSString)) }
-                        } else { print("lyrics: not found") }
+                        let candidates = try await LyricsService.candidates(title: title, artist: artist, album: "", duration: duration)
+                        print("lyrics: \(candidates.count) candidates")
+                        for c in candidates.prefix(6) {
+                            print(String(format: "  score %5.0f  hangul=%@  %@", LyricsService.score(c, title: title, artist: artist, duration: duration), c.containsHangul ? "yes" : "no ", c.summary as NSString))
+                        }
+                        if let best = candidates.first {
+                            for line in (best.lyrics().synced ?? []).prefix(3) { print(String(format: "  [%6.2f] %@", line.time, line.text as NSString)) }
+                        }
                     } catch { print("lyrics: error \(error.localizedDescription)") }
                     semaphore.signal()
                 }

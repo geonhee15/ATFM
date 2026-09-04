@@ -1,5 +1,6 @@
-import Foundation
+import AppKit
 import Observation
+import UniformTypeIdentifiers
 
 struct LyricLine: Identifiable, Equatable {
     let id: Int
@@ -23,7 +24,49 @@ enum LyricsState: Equatable {
     case failed(String)
 }
 
-/// Lyrics lookup via LRCLIB (https://lrclib.net) with an on-disk cache. No key needed.
+/// One LRCLIB search hit (or the exact match) the user can pick from.
+struct LyricsCandidate: Identifiable, Equatable {
+    let id: Int
+    let trackName: String
+    let artistName: String
+    let albumName: String
+    let duration: Double
+    let syncedRaw: String?
+    let plainRaw: String?
+    let source: String
+
+    var isSynced: Bool { !(syncedRaw ?? "").isEmpty }
+    var text: String { syncedRaw ?? plainRaw ?? "" }
+    var containsHangul: Bool { LyricsService.containsHangul(text) }
+
+    var preview: String {
+        let lines = isSynced ? LyricsService.parseLRC(syncedRaw ?? "").map(\.text) : (plainRaw ?? "").components(separatedBy: .newlines)
+        return lines.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
+    }
+
+    var summary: String {
+        let length = duration > 0 ? String(format: " · %d:%02d", Int(duration) / 60, Int(duration) % 60) : ""
+        let tag = isSynced ? "싱크" : "일반"
+        let snippet = preview.isEmpty ? "" : " · " + String(preview.prefix(22))
+        return "[\(tag)] \(trackName) – \(artistName)\(length)\(snippet)"
+    }
+
+    func lyrics() -> Lyrics {
+        Lyrics(plain: plainRaw.flatMap { $0.isEmpty ? nil : $0 },
+               synced: syncedRaw.flatMap { $0.isEmpty ? nil : LyricsService.parseLRC($0) },
+               source: source)
+    }
+
+    var asObject: [String: Any] {
+        var object: [String: Any] = ["id": id, "trackName": trackName, "artistName": artistName, "albumName": albumName,
+                                     "duration": duration, "source": source]
+        if let syncedRaw { object["syncedLyrics"] = syncedRaw }
+        if let plainRaw { object["plainLyrics"] = plainRaw }
+        return object
+    }
+}
+
+/// Lyrics lookup via LRCLIB (https://lrclib.net) with an on-disk cache of the chosen lyrics per song. No key needed.
 enum LyricsService {
     private static let base = "https://lrclib.net/api"
     private static let client = "ATFM (https://github.com/geonhee15/ATFM)"
@@ -35,34 +78,109 @@ enum LyricsService {
         return dir
     }
 
-    static func cacheKey(title: String, artist: String, album: String, duration: Double) -> String {
-        Hashing.sha256(Data("\(title)|\(artist)|\(album)|\(Int(duration.rounded()))".lowercased().utf8))
+    static func cacheKey(title: String, artist: String, duration: Double) -> String {
+        Hashing.sha256(Data("\(title)|\(artist)|\(Int(duration.rounded()))".lowercased().utf8))
     }
 
-    static func fetch(title: String, artist: String, album: String, duration: Double) async throws -> Lyrics? {
-        let key = cacheKey(title: title, artist: artist, album: album, duration: duration)
-        let cacheFile = cacheDirectory.appendingPathComponent(key + ".json")
-        if let data = try? Data(contentsOf: cacheFile),
-           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return lyrics(from: object)
+    private static func cacheFile(_ key: String) -> URL { cacheDirectory.appendingPathComponent(key + ".json") }
+
+    // MARK: Cache (holds whatever is currently chosen for the song: auto pick, user pick, or manual text)
+
+    static func cachedLyrics(key: String) -> Lyrics? {
+        guard let data = try? Data(contentsOf: cacheFile(key)),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return lyrics(from: object)
+    }
+
+    static func cache(_ object: [String: Any], key: String) {
+        if let data = try? JSONSerialization.data(withJSONObject: object) {
+            try? data.write(to: cacheFile(key), options: .atomic)
+        }
+    }
+
+    static func clearCache(key: String) {
+        try? FileManager.default.removeItem(at: cacheFile(key))
+    }
+
+    static func saveManual(text: String, key: String) -> Lyrics? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let synced = parseLRC(trimmed)
+        var object: [String: Any] = ["source": "직접 입력"]
+        if synced.count >= 2 {
+            object["syncedLyrics"] = trimmed
+            object["plainLyrics"] = synced.map(\.text).joined(separator: "\n")
+        } else {
+            object["plainLyrics"] = trimmed
+        }
+        cache(object, key: key)
+        return lyrics(from: object)
+    }
+
+    // MARK: Lookup
+
+    /// Collects candidates from several LRCLIB queries and ranks them (synced, duration match, Hangul, exact names).
+    static func candidates(title: String, artist: String, album: String, duration: Double) async throws -> [LyricsCandidate] {
+        var objects: [[String: Any]] = []
+        if let exact = try? await get(title: title, artist: artist, album: album, duration: duration) { objects.append(exact) }
+        objects += (try? await search(["track_name": title, "artist_name": artist])) ?? []
+        objects += (try? await search(["q": "\(title) \(artist)"])) ?? []
+        objects += (try? await search(["track_name": title])) ?? []
+        let cleaned = cleanTitle(title)
+        if cleaned != title {
+            objects += (try? await search(["track_name": cleaned, "artist_name": artist])) ?? []
         }
 
-        var candidate = try await get(title: title, artist: artist, album: album, duration: duration)
-        if candidate == nil {
-            candidate = try await search(title: title, artist: artist, duration: duration)
+        var seen = Set<Int>()
+        var candidates: [LyricsCandidate] = []
+        for object in objects {
+            guard let id = object["id"] as? Int, !seen.contains(id) else { continue }
+            let synced = (object["syncedLyrics"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let plain = (object["plainLyrics"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let instrumental = object["instrumental"] as? Bool ?? false
+            guard synced != nil || plain != nil || instrumental else { continue }
+            seen.insert(id)
+            candidates.append(LyricsCandidate(
+                id: id,
+                trackName: object["trackName"] as? String ?? title,
+                artistName: object["artistName"] as? String ?? artist,
+                albumName: object["albumName"] as? String ?? "",
+                duration: (object["duration"] as? Double) ?? 0,
+                syncedRaw: synced,
+                plainRaw: instrumental && plain == nil ? "♪ 연주곡" : plain,
+                source: "LRCLIB"
+            ))
         }
-        if candidate == nil {
-            // Retry with a cleaned title ("(feat. …)", "- Remastered" etc. often break exact matching).
-            let cleaned = cleanTitle(title)
-            if cleaned != title {
-                candidate = try await search(title: cleaned, artist: artist, duration: duration)
-            }
+        let ranked = candidates.sorted { score($0, title: title, artist: artist, duration: duration) > score($1, title: title, artist: artist, duration: duration) }
+        // Many uploads are byte-for-byte the same lyrics; keep the first of each and cap the picker.
+        var seenText = Set<String>()
+        var unique: [LyricsCandidate] = []
+        for candidate in ranked {
+            let signature = Hashing.sha256(Data(candidate.text.trimmingCharacters(in: .whitespacesAndNewlines).utf8))
+            guard !seenText.contains(signature) else { continue }
+            seenText.insert(signature)
+            unique.append(candidate)
+            if unique.count >= 12 { break }
         }
-        guard let object = candidate else { return nil }
-        if let data = try? JSONSerialization.data(withJSONObject: object) {
-            try? data.write(to: cacheFile, options: .atomic)
+        return unique
+    }
+
+    static func score(_ candidate: LyricsCandidate, title: String, artist: String, duration: Double) -> Double {
+        var score = 0.0
+        if candidate.isSynced { score += 100 }
+        if duration > 0, candidate.duration > 0 {
+            let delta = abs(candidate.duration - duration)
+            score += delta <= 2 ? 40 : (delta <= 5 ? 20 : (delta <= 15 ? 5 : -40))
         }
-        return lyrics(from: object)
+        if candidate.containsHangul { score += 30 }   // prefer 한글 over romanized uploads
+        if candidate.trackName.compare(title, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame { score += 15 }
+        if candidate.artistName.compare(artist, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame { score += 10 }
+        if candidate.plainRaw != nil { score += 5 }
+        return score
+    }
+
+    static func containsHangul(_ text: String) -> Bool {
+        text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3131...0x318E).contains($0.value) }
     }
 
     private static func request(_ path: String, query: [String: String]) -> URLRequest {
@@ -85,25 +203,18 @@ enum LyricsService {
         return try JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
-    private static func search(title: String, artist: String, duration: Double) async throws -> [String: Any]? {
-        let (data, response) = try await URLSession.shared.data(for: request("/search", query: ["track_name": title, "artist_name": artist]))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let results = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], !results.isEmpty else { return nil }
-        // Prefer synced lyrics whose duration is close to ours.
-        func score(_ item: [String: Any]) -> Double {
-            let synced = (item["syncedLyrics"] as? String)?.isEmpty == false ? 100.0 : 0
-            let itemDuration = (item["duration"] as? Double) ?? 0
-            let closeness = duration > 0 && itemDuration > 0 ? max(0, 30 - abs(itemDuration - duration)) : 0
-            return synced + closeness
-        }
-        return results.max { score($0) < score($1) }
+    private static func search(_ query: [String: String]) async throws -> [[String: Any]] {
+        let (data, response) = try await URLSession.shared.data(for: request("/search", query: query))
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        return (try JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
     }
 
-    private static func lyrics(from object: [String: Any]) -> Lyrics? {
-        if object["instrumental"] as? Bool == true { return Lyrics(plain: "♪ 연주곡", synced: nil, source: "LRCLIB") }
+    static func lyrics(from object: [String: Any]) -> Lyrics? {
+        let source = object["source"] as? String ?? "LRCLIB"
+        if object["instrumental"] as? Bool == true { return Lyrics(plain: "♪ 연주곡", synced: nil, source: source) }
         let plain = (object["plainLyrics"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         let synced = (object["syncedLyrics"] as? String).flatMap { $0.isEmpty ? nil : parseLRC($0) }
-        let result = Lyrics(plain: plain, synced: synced, source: "LRCLIB")
+        let result = Lyrics(plain: plain, synced: synced, source: source)
         return result.isEmpty ? nil : result
     }
 
@@ -155,6 +266,11 @@ enum LyricsError: LocalizedError {
 @Observable
 final class LyricsController {
     private(set) var state: LyricsState = .idle
+    private(set) var candidates: [LyricsCandidate] = []
+    private(set) var selectedCandidateID: Int?
+    private(set) var isLoadingCandidates = false
+    var isEditing = false
+    var draft = ""
     /// Per-track sync correction in seconds; positive shows lines earlier.
     private(set) var offset: Double = 0
     /// Fetch automatically whenever the track changes (true while the lyrics box is open).
@@ -229,28 +345,49 @@ final class LyricsController {
         trackKey = newKey
         offset = offsets[newKey] ?? 0
         task?.cancel()
+        candidates = []
+        selectedCandidateID = nil
+        isEditing = false
         state = memory[newKey] ?? .idle
         if autoFetch { ensureLoaded() }
     }
 
+    private var cacheKey: String? {
+        guard let track = monitor.track else { return nil }
+        return LyricsService.cacheKey(title: track.title, artist: track.artist, duration: track.duration)
+    }
+
     func ensureLoaded() {
-        guard let track = monitor.track else { return }
+        guard let track = monitor.track, let cacheKey else { return }
         let currentKey = key(for: track)
         if trackKey != currentKey {
             trackKey = currentKey
             offset = offsets[currentKey] ?? 0
+            candidates = []
+            selectedCandidateID = nil
             state = memory[currentKey] ?? .idle
         }
         if case .idle = state {} else { return }
+        if let cached = LyricsService.cachedLyrics(key: cacheKey) {
+            state = .found(cached)
+            memory[currentKey] = state
+            return
+        }
         state = .loading
         task?.cancel()
         task = Task { [weak self] in
             do {
-                let lyrics = try await LyricsService.fetch(title: track.title, artist: track.artist, album: track.album, duration: track.duration)
+                let found = try await LyricsService.candidates(title: track.title, artist: track.artist, album: track.album, duration: track.duration)
                 guard !Task.isCancelled, let self, self.trackKey == currentKey else { return }
-                let result: LyricsState = lyrics.map { .found($0) } ?? .notFound
-                self.memory[currentKey] = result
-                self.state = result
+                self.candidates = found
+                if let best = found.first {
+                    LyricsService.cache(best.asObject, key: cacheKey)
+                    self.selectedCandidateID = best.id
+                    self.state = .found(best.lyrics())
+                } else {
+                    self.state = .notFound
+                }
+                self.memory[currentKey] = self.state
             } catch {
                 guard !Task.isCancelled, let self, self.trackKey == currentKey else { return }
                 self.state = .failed(error.localizedDescription)
@@ -258,10 +395,79 @@ final class LyricsController {
         }
     }
 
+    /// Fetches the candidate list for the picker (used when the song came from the cache).
+    func loadCandidates() {
+        guard let track = monitor.track, !isLoadingCandidates else { return }
+        let currentKey = key(for: track)
+        isLoadingCandidates = true
+        Task { [weak self] in
+            let found = (try? await LyricsService.candidates(title: track.title, artist: track.artist, album: track.album, duration: track.duration)) ?? []
+            guard let self, self.trackKey == currentKey else { return }
+            self.candidates = found
+            self.isLoadingCandidates = false
+        }
+    }
+
+    func choose(_ candidate: LyricsCandidate) {
+        guard let cacheKey else { return }
+        LyricsService.cache(candidate.asObject, key: cacheKey)
+        selectedCandidateID = candidate.id
+        state = .found(candidate.lyrics())
+        memory[trackKey] = state
+    }
+
+    /// Drops the cached choice and searches again from scratch.
     func retry() {
-        if let track = monitor.track { memory[key(for: track)] = nil }
+        if let cacheKey { LyricsService.clearCache(key: cacheKey) }
+        memory[trackKey] = nil
+        candidates = []
+        selectedCandidateID = nil
         state = .idle
         ensureLoaded()
+    }
+
+    func beginEditing() {
+        draft = lyrics.map { lyrics -> String in
+            if let synced = lyrics.synced, !synced.isEmpty {
+                return synced.map { line in
+                    let minutes = Int(line.time) / 60
+                    let seconds = line.time - Double(minutes * 60)
+                    return String(format: "[%02d:%05.2f] %@", minutes, seconds, line.text as NSString)
+                }.joined(separator: "\n")
+            }
+            return lyrics.plain ?? ""
+        } ?? ""
+        isEditing = true
+    }
+
+    func saveDraft() {
+        guard let cacheKey else { return }
+        if let saved = LyricsService.saveManual(text: draft, key: cacheKey) {
+            selectedCandidateID = nil
+            state = .found(saved)
+            memory[trackKey] = state
+        }
+        isEditing = false
+    }
+
+    func importLRCFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.plainText, .text]
+        panel.message = "가사 파일(.lrc 또는 .txt)을 고르세요"
+        NSApp.activate(ignoringOtherApps: true)
+        panel.begin { [weak self] response in
+            MainActor.assumeIsolated {
+                guard response == .OK, let url = panel.url, let self, let cacheKey = self.cacheKey else { return }
+                guard let text = (try? String(contentsOf: url, encoding: .utf8)) ?? (try? String(contentsOf: url, encoding: .utf16)) else { return }
+                if let saved = LyricsService.saveManual(text: text, key: cacheKey) {
+                    self.selectedCandidateID = nil
+                    self.state = .found(saved)
+                    self.memory[self.trackKey] = self.state
+                }
+            }
+        }
     }
 
     var lyrics: Lyrics? {
