@@ -40,8 +40,15 @@ EXTRA+=(-module-cache-path build/ModuleCache)
 echo "▶ swiftc ($CONFIG, $ARCH)"
 swiftc "${OPT[@]}" -parse-as-library -swift-version 5 \
   -target "${ARCH}-apple-macos14.0" -sdk "$SDK" "${EXTRA[@]}" \
-  $(find Sources -name '*.swift' | sort) \
+  $(find Sources/ATFM -name '*.swift' | sort) \
   -o "build/$APP_NAME"
+
+# Now Playing bridge: a dylib that Apple's perl loads (see Sources/MediaRemoteBridge/Bridge.swift).
+echo "▶ MediaRemote bridge"
+swiftc -O -emit-library -module-name ATFMMediaRemote \
+  -target "${ARCH}-apple-macos14.0" -sdk "$SDK" "${EXTRA[@]}" \
+  Sources/MediaRemoteBridge/Bridge.swift \
+  -o "build/ATFMMediaRemote.dylib"
 
 APP="build/$APP_NAME.app"
 rm -rf "$APP"
@@ -56,6 +63,8 @@ if [[ ! -f build/AppIcon.icns ]]; then
   ./build/make-icon build/AppIcon.icns
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp build/ATFMMediaRemote.dylib "$APP/Contents/Resources/ATFMMediaRemote.dylib"
+cp Resources/mediaremote.pl "$APP/Contents/Resources/mediaremote.pl"
 
 xattr -cr "$APP"
 codesign --force --sign - "$APP"

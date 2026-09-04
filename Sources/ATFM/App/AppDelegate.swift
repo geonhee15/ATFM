@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
     private let converter = FileConverter()
+    private let nowPlaying = NowPlayingMonitor()
+    private var miniPlayer: MiniPlayerController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -61,10 +63,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             monitor?.markOwnChange()
         }
         self.gemini = gemini
+        let miniPlayer = MiniPlayerController(monitor: nowPlaying)
+        self.miniPlayer = miniPlayer
+        nowPlaying.start()
+
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
                             keepAwake: keepAwake, gemini: gemini, converter: converter,
+                            nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
         let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
         let bubble = BubblePanelController(
@@ -78,8 +85,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if visible { vm.presentationCount += 1 }
         }
         vm.onRequestKeyboardReturn = { [weak bubble] in bubble?.returnKeyboardFocus() }
-        appState.applyAppearance = { [weak bubble] mode in bubble?.apply(appearance: mode.nsAppearance) }
+        appState.applyAppearance = { [weak bubble, weak miniPlayer] mode in
+            bubble?.apply(appearance: mode.nsAppearance)
+            miniPlayer?.apply(appearance: mode.nsAppearance)
+        }
         bubble.apply(appearance: appState.appearanceMode.nsAppearance)
+        miniPlayer.apply(appearance: appState.appearanceMode.nsAppearance)
         self.bubble = bubble
         NSLog("ATFM: appearance mode %@ (bundle %@)", appState.appearanceMode.rawValue, Bundle.main.bundleIdentifier ?? "nil")
 
@@ -105,6 +116,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if let miniPath = env["ATFM_SNAPSHOT_MINI"] {
+            let delay = Double(env["ATFM_SNAPSHOT_DELAY"] ?? "") ?? 2.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.5) {
+                MainActor.assumeIsolated { self.miniPlayer?.writeSnapshot(to: miniPath) }
+            }
+        }
         if env["ATFM_AUTO_SHOW"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 MainActor.assumeIsolated { self.bubble?.show() }
@@ -125,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         networkMonitor?.setActive(false)
         keepAwake.setActive(false)
         converter.cancel()
+        nowPlaying.stop()
     }
 
     private func statusItemScreenRect() -> CGRect? {

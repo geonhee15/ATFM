@@ -42,6 +42,11 @@
   - 오디오 → MP3 · M4A(AAC) · WAV · FLAC · AIFF · OGG(Opus), 비트레이트 선택
   - 영상·오디오는 Homebrew `ffmpeg`(`/opt/homebrew/bin` 또는 `/usr/local/bin`)를 쓰고, 없으면 AVFoundation으로 MP4/MOV/M4A만 지원
   - 저장 위치: 원본 폴더(같은 확장자면 `-변환` 붙임) · 다운로드 · 지정 폴더, 진행률 · 중단 · Finder에서 보기
+- **미니 플레이어** 탭: Spotify(앱·웹 플레이어)나 다른 앱이 노래를 재생하면 화면 구석에 작은 플레이어가 뜹니다
+  - 앨범아트 · 제목 · 아티스트 · 진행 바 · 이전/재생·일시정지/다음, 항상 위, 모든 Space에서 표시, 드래그로 이동
+  - ✕를 누르면 ATFM에서 다시 켤 때까지 숨김. 표시할 소스(Spotify 앱만 / + 브라우저 / 모든 앱), 일시정지 표시, 위치 설정
+  - macOS의 Now Playing(MediaRemote)은 일반 앱에 정보를 주지 않아서, Apple 서명 `perl`이 작은 브리지
+    (`ATFMMediaRemote.dylib` + `mediaremote.pl`)를 로드해 JSON으로 중계합니다. 권한 요청 없음
 - **간편 AI** 탭: Gemini 미니 채팅. API 키를 한 번 넣으면 스트리밍으로 답하고, 모델 목록 불러오기/선택
   (쓸 수 없는 모델이면 계정에서 쓸 수 있는 flash 모델로 자동 교체), Google 검색 그라운딩 토글(기본 켜짐,
   날씨·뉴스 같은 실시간 질문에 출처와 함께 답변), 답변 복사, 대화 기록은 최근 20개까지 보관.
@@ -69,7 +74,8 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `ai` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
+| `ATFM_SNAPSHOT_MINI=/path.png` | 미니 플레이어 창을 PNG로 저장 |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
 
 `Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.
@@ -89,11 +95,13 @@ Sources/ATFM
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
 ├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐)
+├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)
 └── Support/     설정 키, 앱 아이콘 캐시
+Sources/MediaRemoteBridge/Bridge.swift   perl이 로드하는 MediaRemote 브리지 (dylib로 따로 빌드)
 ```
 
 ## 앞으로

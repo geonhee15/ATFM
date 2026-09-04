@@ -77,6 +77,30 @@ enum Probe {
             print(String(format: "  %-28@ cpu %5.1f%%  mem %10@  energy %8@  procs %d  app=%@", a.name as NSString, a.cpuPercent, Format.memory(a.memoryBytes) as NSString, Format.milliwatts(a.energyMilliwatts) as NSString, a.processCount, (a.bundlePath != nil) ? "yes" : "no"))
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_NOWPLAYING"] == "1" {
+            if let resources = NowPlayingMonitor.bridgeResources {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+                process.arguments = [resources.script.path, resources.dylib.path]
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardInput = Pipe()
+                try? process.run()
+                Thread.sleep(forTimeInterval: 3)
+                process.terminate()
+                let text = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                for line in text.split(separator: "\n").prefix(3) {
+                    var shown = String(line)
+                    if let range = shown.range(of: "\"artwork\":\"") {
+                        shown = String(shown[..<range.lowerBound]) + "\"artwork\":\"…\"}"
+                    }
+                    print("nowplaying: \(shown.prefix(300))")
+                }
+                if text.isEmpty { print("nowplaying: (no output)") }
+            } else {
+                print("nowplaying: bridge resources missing")
+            }
+        }
         if let dir = ProcessInfo.processInfo.environment["ATFM_PROBE_CONVERT"] {
             Self.probeConversions(in: URL(fileURLWithPath: dir))
         }

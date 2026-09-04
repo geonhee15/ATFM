@@ -8,6 +8,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case network
     case actions
     case convert
+    case player
     case ai
     case settings
 
@@ -22,6 +23,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .network: return "network"
         case .actions: return "bolt"
         case .convert: return "arrow.triangle.2.circlepath"
+        case .player: return "music.note"
         case .ai: return "bubble.left.and.text.bubble.right"
         case .settings: return "gearshape"
         }
@@ -36,6 +38,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
         case .convert: return "파일 변환"
+        case .player: return "미니 플레이어"
         case .ai: return "간편 AI"
         case .settings: return "설정"
         }
@@ -53,6 +56,8 @@ struct RootView: View {
     var keepAwake: KeepAwake
     var gemini: GeminiChat
     var converter: FileConverter
+    var nowPlaying: NowPlayingMonitor
+    var miniPlayer: MiniPlayerController
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -86,6 +91,8 @@ struct RootView: View {
                     QuickActionsView(appState: appState, quick: quickActions)
                 case .convert:
                     ConvertView(converter: converter)
+                case .player:
+                    NowPlayingTabView(monitor: nowPlaying, controller: miniPlayer)
                 case .ai:
                     GeminiChatView(chat: gemini)
                 case .settings:
@@ -118,13 +125,13 @@ struct TabBar: View {
     @Binding var selection: AppTab
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ForEach(AppTab.allCases) { tab in
                 Button {
                     withAnimation(.snappy(duration: 0.2)) { selection = tab }
                 } label: {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(selection == tab ? Color.accentColor : Color.secondary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 40)
