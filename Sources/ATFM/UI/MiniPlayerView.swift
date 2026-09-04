@@ -8,6 +8,25 @@ struct MiniPlayerView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        VStack(spacing: 0) {
+            playerRow
+                .frame(height: MiniPlayerController.size.height)
+            if controller.isLyricsExpanded {
+                Divider().padding(.horizontal, 12)
+                LyricsBox(lyrics: controller.lyrics, monitor: monitor)
+                    .frame(height: MiniPlayerController.lyricsHeight)
+            }
+        }
+        .frame(width: controller.currentSize.width, height: controller.currentSize.height, alignment: .top)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Theme.cardStroke(scheme), lineWidth: 1)
+                .allowsHitTesting(false)
+        )
+        .onHover { hovering = $0 }
+    }
+
+    private var playerRow: some View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: 12) {
                 ArtworkView(image: monitor.artwork, size: 64)
@@ -15,6 +34,7 @@ struct MiniPlayerView: View {
                     Text(monitor.track?.title ?? "재생 중인 곡 없음")
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
+                        .padding(.trailing, 36)
                     Text(monitor.track?.artist ?? "")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
@@ -28,23 +48,134 @@ struct MiniPlayerView: View {
             .padding(.trailing, 14)
             .padding(.vertical, 12)
 
-            Button { controller.dismissByUser() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Button { controller.setLyricsExpanded(!controller.isLyricsExpanded) } label: {
+                    Image(systemName: "music.mic")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(controller.isLyricsExpanded ? Color.accentColor : Color.secondary)
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .help(controller.isLyricsExpanded ? "가사 닫기" : "가사 보기")
+                Button { controller.dismissByUser() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .help("닫기 (ATFM에서 다시 켤 수 있어요)")
             }
-            .buttonStyle(.plain)
-            .opacity(hovering ? 1 : 0.35)
+            .opacity(hovering || controller.isLyricsExpanded ? 1 : 0.4)
             .padding(6)
-            .help("닫기 (ATFM에서 다시 켤 수 있어요)")
         }
-        .frame(width: MiniPlayerController.size.width, height: MiniPlayerController.size.height)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Theme.cardStroke(scheme), lineWidth: 1)
-                .allowsHitTesting(false)
-        )
-        .onHover { hovering = $0 }
+    }
+}
+
+struct LyricsBox: View {
+    var lyrics: LyricsController
+    var monitor: NowPlayingMonitor
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "music.mic").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                Text("가사").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                if lyrics.lyrics?.isSynced == true {
+                    Text("싱크")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                }
+                Spacer()
+                Text(lyrics.lyrics?.source ?? "LRCLIB").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch lyrics.state {
+        case .idle, .loading:
+            centered {
+                ProgressView().controlSize(.small)
+                Text("가사 찾는 중…").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+        case .notFound:
+            centered {
+                Image(systemName: "text.badge.xmark").font(.system(size: 18)).foregroundStyle(.tertiary)
+                Text("이 곡의 가사를 찾지 못했어요").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            centered {
+                Text(message).font(.system(size: 12)).foregroundStyle(.red).multilineTextAlignment(.center)
+                Button("다시 시도") { lyrics.retry() }.controlSize(.small)
+            }
+        case .found(let found):
+            if let lines = found.synced, !lines.isEmpty {
+                SyncedLyricsList(lines: lines, currentIndex: lyrics.currentLineIndex(at: monitor.now)) { line in
+                    lyrics.seek(to: line)
+                }
+            } else {
+                ScrollView {
+                    Text(found.plain ?? "")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                }
+            }
+        }
+    }
+
+    private func centered<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 8) { content() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 14)
+    }
+}
+
+struct SyncedLyricsList: View {
+    let lines: [LyricLine]
+    let currentIndex: Int?
+    let onTap: (LyricLine) -> Void
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(lines) { line in
+                        let isCurrent = line.id == currentIndex
+                        let isPast = currentIndex.map { line.id < $0 } ?? false
+                        Text(line.text.isEmpty ? "♪" : line.text)
+                            .font(.system(size: isCurrent ? 14 : 13, weight: isCurrent ? .semibold : .regular))
+                            .foregroundStyle(isCurrent ? Color.primary : Color.secondary)
+                            .opacity(isPast ? 0.55 : 1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onTap(line) }
+                            .id(line.id)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 90)
+            }
+            .onChange(of: currentIndex) { _, index in
+                guard let index else { return }
+                withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(index, anchor: .center) }
+            }
+            .onAppear {
+                if let currentIndex { proxy.scrollTo(currentIndex, anchor: .center) }
+            }
+        }
     }
 }
 

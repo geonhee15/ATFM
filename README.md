@@ -45,6 +45,8 @@
 - **미니 플레이어** 탭: Spotify(앱·웹 플레이어)나 다른 앱이 노래를 재생하면 화면 구석에 작은 플레이어가 뜹니다
   - 앨범아트 · 제목 · 아티스트 · 진행 바 · 이전/재생·일시정지/다음, 항상 위, 모든 Space에서 표시, 드래그로 이동
   - ✕를 누르면 ATFM에서 다시 켤 때까지 숨김. 표시할 소스(Spotify 앱만 / + 브라우저 / 모든 앱), 일시정지 표시, 위치 설정
+  - 🎤 버튼으로 아래에 **가사** 박스 펼치기: LRCLIB(무료, 키 불필요)에서 찾아 타임라인 싱크가 있으면 현재 줄을 강조하며
+    자동 스크롤(줄 클릭 → 그 위치로 이동), 없으면 일반 가사. 결과는 `Application Support/ATFM/lyrics/`에 캐시
   - macOS의 Now Playing(MediaRemote)은 일반 앱에 정보를 주지 않아서, Apple 서명 `perl`이 작은 브리지
     (`ATFMMediaRemote.dylib` + `mediaremote.pl`)를 로드해 JSON으로 중계합니다. 권한 요청 없음
 - **간편 AI** 탭: Gemini 미니 채팅. API 키를 한 번 넣으면 스트리밍으로 답하고, 모델 목록 불러오기/선택
@@ -95,7 +97,7 @@ Sources/ATFM
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
 ├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐)
-├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널
+├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널, LRCLIB 가사
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)

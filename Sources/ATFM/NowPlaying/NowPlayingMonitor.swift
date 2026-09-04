@@ -58,7 +58,7 @@ final class NowPlayingMonitor {
         guard process == nil else { return }
         stopping = false
         launchBridge()
-        let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.now = Date() }
         }
         RunLoop.main.add(t, forMode: .common)

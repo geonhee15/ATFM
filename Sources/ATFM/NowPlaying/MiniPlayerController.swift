@@ -32,6 +32,7 @@ enum MiniPlayerSourceFilter: String, CaseIterable, Identifiable {
 @Observable
 final class MiniPlayerController {
     static let size = NSSize(width: 330, height: 92)
+    static let lyricsHeight: CGFloat = 236
     private static let margin: CGFloat = 16
 
     private(set) var isEnabled: Bool
@@ -39,8 +40,11 @@ final class MiniPlayerController {
     private(set) var showWhenPaused: Bool
     private(set) var corner: MiniPlayerCorner
     private(set) var isVisible = false
+    private(set) var isLyricsExpanded: Bool
+    var currentSize: NSSize { isLyricsExpanded ? NSSize(width: Self.size.width, height: Self.size.height + Self.lyricsHeight) : Self.size }
 
     let monitor: NowPlayingMonitor
+    let lyrics: LyricsController
     @ObservationIgnored private var panel: NSPanel?
     @ObservationIgnored private var customOrigin: CGPoint?
     @ObservationIgnored private var programmaticMove = false
@@ -52,11 +56,14 @@ final class MiniPlayerController {
         static let paused = "miniPlayerShowWhenPaused"
         static let corner = "miniPlayerCorner"
         static let origin = "miniPlayerOrigin"
+        static let lyrics = "miniPlayerLyricsExpanded"
     }
 
     init(monitor: NowPlayingMonitor) {
         self.monitor = monitor
+        lyrics = LyricsController(monitor: monitor)
         let defaults = UserDefaults.standard
+        isLyricsExpanded = defaults.bool(forKey: Key.lyrics)
         isEnabled = (defaults.object(forKey: Key.enabled) as? Bool) ?? true
         sourceFilter = MiniPlayerSourceFilter(rawValue: defaults.string(forKey: Key.source) ?? "") ?? .spotifyAndBrowsers
         showWhenPaused = (defaults.object(forKey: Key.paused) as? Bool) ?? true
@@ -64,6 +71,7 @@ final class MiniPlayerController {
         if let stored = defaults.array(forKey: Key.origin) as? [Double], stored.count == 2 {
             customOrigin = CGPoint(x: stored[0], y: stored[1])
         }
+        lyrics.autoFetch = isLyricsExpanded
         observe()
     }
 
@@ -112,6 +120,30 @@ final class MiniPlayerController {
     func apply(appearance: NSAppearance?) {
         self.appearance = appearance
         panel?.appearance = appearance
+    }
+
+    /// Opens/closes the lyrics box. The window grows away from the nearest screen edge so it stays on screen.
+    func setLyricsExpanded(_ expanded: Bool) {
+        guard expanded != isLyricsExpanded else { return }
+        isLyricsExpanded = expanded
+        UserDefaults.standard.set(expanded, forKey: Key.lyrics)
+        lyrics.autoFetch = expanded
+        guard let panel, isVisible else { return }
+        let old = panel.frame
+        let newSize = currentSize
+        let screen = NSScreen.main?.visibleFrame ?? old
+        let anchorTop = old.midY > screen.midY   // upper half: keep the top edge, grow downward
+        var origin = old.origin
+        if anchorTop { origin.y = old.maxY - newSize.height }
+        origin.y = max(screen.minY, min(origin.y, screen.maxY - newSize.height))
+        programmaticMove = true
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.22
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(NSRect(origin: origin, size: newSize), display: true)
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated { self?.programmaticMove = false }
+        }
     }
 
     // MARK: Visibility
@@ -175,7 +207,7 @@ final class MiniPlayerController {
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: Self.size),
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: currentSize),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -191,7 +223,7 @@ final class MiniPlayerController {
         panel.isExcludedFromWindowsMenu = true
         panel.appearance = appearance
 
-        let container = MiniPlayerContainerView(frame: NSRect(origin: .zero, size: Self.size))
+        let container = MiniPlayerContainerView(frame: NSRect(origin: .zero, size: currentSize))
         let hosting = NSHostingView(rootView: AnyView(MiniPlayerView(monitor: monitor, controller: self)))
         hosting.sizingOptions = []
         container.install(hosting: hosting)
@@ -214,16 +246,18 @@ final class MiniPlayerController {
         guard let panel else { return }
         let screen = NSScreen.main ?? NSScreen.screens.first
         guard let visible = screen?.visibleFrame else { return }
+        let size = currentSize
         var origin: CGPoint
-        if let customOrigin, visible.insetBy(dx: -Self.size.width + 40, dy: -Self.size.height + 40).contains(customOrigin) {
+        if let customOrigin, visible.insetBy(dx: -size.width + 40, dy: -size.height + 40).contains(customOrigin) {
             origin = customOrigin
         } else {
-            let x = corner == .bottomRight || corner == .topRight ? visible.maxX - Self.size.width - Self.margin : visible.minX + Self.margin
-            let y = corner == .bottomRight || corner == .bottomLeft ? visible.minY + Self.margin : visible.maxY - Self.size.height - Self.margin
+            let x = corner == .bottomRight || corner == .topRight ? visible.maxX - size.width - Self.margin : visible.minX + Self.margin
+            let y = corner == .bottomRight || corner == .bottomLeft ? visible.minY + Self.margin : visible.maxY - size.height - Self.margin
             origin = CGPoint(x: x, y: y)
         }
+        origin.y = max(visible.minY, min(origin.y, visible.maxY - size.height))
         programmaticMove = true
-        panel.setFrame(NSRect(origin: origin, size: Self.size), display: true)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
         programmaticMove = false
     }
 }

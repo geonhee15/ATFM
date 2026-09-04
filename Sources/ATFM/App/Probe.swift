@@ -77,6 +77,24 @@ enum Probe {
             print(String(format: "  %-28@ cpu %5.1f%%  mem %10@  energy %8@  procs %d  app=%@", a.name as NSString, a.cpuPercent, Format.memory(a.memoryBytes) as NSString, Format.milliwatts(a.energyMilliwatts) as NSString, a.processCount, (a.bundlePath != nil) ? "yes" : "no"))
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
+        if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_LYRICS"] {
+            let parts = spec.components(separatedBy: "|")
+            if parts.count >= 2 {
+                let semaphore = DispatchSemaphore(value: 0)
+                let title = parts[0], artist = parts[1]
+                let duration = parts.count > 2 ? Double(parts[2]) ?? 0 : 0
+                Task.detached {
+                    do {
+                        if let lyrics = try await LyricsService.fetch(title: title, artist: artist, album: "", duration: duration) {
+                            print("lyrics: synced=\(lyrics.isSynced) lines=\(lyrics.synced?.count ?? 0) plain=\(lyrics.plain?.count ?? 0) chars")
+                            for line in (lyrics.synced ?? []).prefix(4) { print(String(format: "  [%6.2f] %@", line.time, line.text as NSString)) }
+                        } else { print("lyrics: not found") }
+                    } catch { print("lyrics: error \(error.localizedDescription)") }
+                    semaphore.signal()
+                }
+                _ = semaphore.wait(timeout: .now() + 30)
+            }
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_NOWPLAYING"] == "1" {
             if let resources = NowPlayingMonitor.bridgeResources {
                 let process = Process()

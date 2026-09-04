@@ -116,6 +116,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if env["ATFM_DEBUG_LYRICS"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                MainActor.assumeIsolated { self.miniPlayer?.setLyricsExpanded(true) }
+            }
+        }
         if let miniPath = env["ATFM_SNAPSHOT_MINI"] {
             let delay = Double(env["ATFM_SNAPSHOT_DELAY"] ?? "") ?? 2.0
             DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.5) {
