@@ -144,17 +144,45 @@ final class BubblePanel: NSPanel {
 
 /// Owns the speech-bubble panel that hangs below the status item.
 /// It is a non-activating floating panel, so it stays visible while the user works in other apps.
+struct BubbleResizeDelta {
+    var left: CGFloat = 0     // positive = left edge moves right (narrower)
+    var right: CGFloat = 0    // positive = right edge moves right (wider)
+    var bottom: CGFloat = 0   // positive = taller
+}
+
 @MainActor
 final class BubblePanelController {
+    static let defaultSize = NSSize(width: 372, height: 640)
+    static let minSize = NSSize(width: 300, height: 420)
+    static let maxWidth: CGFloat = 640
+    private static let sizeKey = "bubbleSize"
+    private static let arrowKey = "bubbleArrowOffset"
+
     let panel: BubblePanel
     private let container: BubbleContainerView
-    private let size: NSSize
+    private(set) var size: NSSize
+    /// Horizontal distance from the panel's left edge to the arrow tip (keeps the arrow on the status item).
+    private var arrowOffset: CGFloat
+    private let persistSize: Bool
     private let anchorProvider: () -> CGRect?
     private(set) var isVisible = false
     var onVisibilityChanged: ((Bool) -> Void)?
 
-    init<Content: View>(size: NSSize, content: Content, anchorProvider: @escaping () -> CGRect?) {
+    init<Content: View>(size initialSize: NSSize, useStoredSize: Bool, content: Content, anchorProvider: @escaping () -> CGRect?) {
+        let defaults = UserDefaults.standard
+        var size = initialSize
+        if useStoredSize, let stored = defaults.array(forKey: Self.sizeKey) as? [Double], stored.count == 2 {
+            size = NSSize(width: stored[0], height: stored[1])
+        }
+        size.width = min(max(size.width, Self.minSize.width), Self.maxWidth)
+        size.height = max(size.height, Self.minSize.height)
         self.size = size
+        persistSize = useStoredSize
+        if useStoredSize, let stored = defaults.object(forKey: Self.arrowKey) as? Double {
+            arrowOffset = stored
+        } else {
+            arrowOffset = size.width / 2
+        }
         self.anchorProvider = anchorProvider
 
         let hosting = NSHostingView(rootView: AnyView(content))
@@ -237,6 +265,51 @@ final class BubblePanelController {
         }
     }
 
+    // MARK: Resizing
+
+    private var minArrowOffset: CGFloat { BubbleMetrics.cornerRadius + BubbleMetrics.arrowWidth / 2 + 2 }
+
+    func applyResize(_ delta: BubbleResizeDelta) {
+        guard let anchor = anchorProvider() else { return }
+        let visible = screen(for: anchor).visibleFrame
+        let maxWidth = min(Self.maxWidth, visible.width - 16)
+        let maxHeight = max(Self.minSize.height, anchor.minY - 1 - visible.minY - 8)
+
+        let requestedWidth = size.width + delta.right - delta.left
+        let width = min(max(requestedWidth, Self.minSize.width), maxWidth)
+        // How far the left edge really moved (right-edge drags leave it alone).
+        let leftShift = delta.left != 0 ? (size.width + delta.right - width) : 0
+        let height = min(max(size.height + delta.bottom, Self.minSize.height), maxHeight)
+        guard width != size.width || height != size.height else { return }
+
+        size = NSSize(width: width, height: height)
+        arrowOffset = min(max(arrowOffset - leftShift, minArrowOffset), width - minArrowOffset)
+        let frame = targetFrame(anchor: anchor)
+        container.arrowX = anchor.midX - frame.minX
+        panel.setFrame(frame, display: true)
+        panel.invalidateShadow()
+        persist()
+    }
+
+    func resetSize() {
+        size = Self.defaultSize
+        arrowOffset = size.width / 2
+        UserDefaults.standard.removeObject(forKey: Self.sizeKey)
+        UserDefaults.standard.removeObject(forKey: Self.arrowKey)
+        reposition()
+    }
+
+    private func persist() {
+        guard persistSize else { return }
+        UserDefaults.standard.set([size.width, size.height], forKey: Self.sizeKey)
+        UserDefaults.standard.set(arrowOffset, forKey: Self.arrowKey)
+    }
+
+    private func screen(for anchor: CGRect) -> NSScreen {
+        let probe = CGPoint(x: anchor.midX, y: anchor.midY)
+        return NSScreen.screens.first { $0.frame.contains(probe) } ?? NSScreen.main ?? NSScreen.screens[0]
+    }
+
     /// Re-anchors the panel if the status item or screen layout moved.
     func reposition() {
         guard isVisible, let anchor = anchorProvider() else { return }
@@ -270,11 +343,12 @@ final class BubblePanelController {
     }
 
     private func targetFrame(anchor: CGRect) -> CGRect {
-        let probe = CGPoint(x: anchor.midX, y: anchor.midY)
-        let screen = NSScreen.screens.first { $0.frame.contains(probe) } ?? NSScreen.main ?? NSScreen.screens[0]
-        let visible = screen.visibleFrame
-        var x = anchor.midX - size.width / 2
+        let visible = screen(for: anchor).visibleFrame
+        let offset = min(max(arrowOffset, minArrowOffset), size.width - minArrowOffset)
+        var x = anchor.midX - offset
         x = min(max(x, visible.minX + 8), visible.maxX - size.width - 8)
+        // Keep the remembered offset consistent with where the panel actually ended up.
+        arrowOffset = min(max(anchor.midX - x, minArrowOffset), size.width - minArrowOffset)
         let y = anchor.minY - size.height - 1
         return CGRect(x: x.rounded(), y: max(y.rounded(), visible.minY), width: size.width, height: size.height)
     }

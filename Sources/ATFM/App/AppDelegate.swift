@@ -73,9 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             keepAwake: keepAwake, gemini: gemini, converter: converter,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
-        let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
+        let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
         let bubble = BubblePanelController(
-            size: NSSize(width: 372, height: panelHeight),
+            size: NSSize(width: BubblePanelController.defaultSize.width, height: heightOverride ?? BubblePanelController.defaultSize.height),
+            useStoredSize: heightOverride == nil,
             content: root,
             anchorProvider: { [weak self] in self?.statusItemScreenRect() }
         )
@@ -84,7 +85,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.appState.setBubbleVisible(visible)
             if visible { vm.presentationCount += 1 }
         }
+        let env = ProcessInfo.processInfo.environment
         vm.onRequestKeyboardReturn = { [weak bubble] in bubble?.returnKeyboardFocus() }
+        appState.resizeBubble = { [weak bubble] delta in bubble?.applyResize(delta) }
+        appState.resetBubbleSize = { [weak bubble] in bubble?.resetSize() }
+        if let spec = env["ATFM_DEBUG_RESIZE"] {
+            // e.g. "left:-40,bottom:120" applied after the bubble appears
+            var delta = BubbleResizeDelta()
+            for part in spec.split(separator: ",") {
+                let kv = part.split(separator: ":")
+                guard kv.count == 2, let value = Double(kv[1]) else { continue }
+                switch kv[0] {
+                case "left": delta.left = value
+                case "right": delta.right = value
+                case "bottom": delta.bottom = value
+                default: break
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                MainActor.assumeIsolated { bubble.applyResize(delta) }
+            }
+        }
         appState.applyAppearance = { [weak bubble, weak miniPlayer] mode in
             bubble?.apply(appearance: mode.nsAppearance)
             miniPlayer?.apply(appearance: mode.nsAppearance)
@@ -94,7 +115,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.bubble = bubble
         NSLog("ATFM: appearance mode %@ (bundle %@)", appState.appearanceMode.rawValue, Bundle.main.bundleIdentifier ?? "nil")
 
-        let env = ProcessInfo.processInfo.environment
         if let tabName = env["ATFM_TAB"], let initial = AppTab(rawValue: tabName) {
             appState.select(initial)
         }

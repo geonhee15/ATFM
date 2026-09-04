@@ -15,6 +15,8 @@ final class AppState {
     @ObservationIgnored var networkMonitor: NetworkMonitor?
     @ObservationIgnored var quickActions: QuickActions?
     @ObservationIgnored var applyAppearance: ((AppearanceMode) -> Void)?
+    @ObservationIgnored var resizeBubble: ((BubbleResizeDelta) -> Void)?
+    @ObservationIgnored var resetBubbleSize: (() -> Void)?
     private static let appearanceKey = "appearanceMode"
 
     init() {

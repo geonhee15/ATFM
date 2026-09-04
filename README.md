@@ -8,6 +8,8 @@
 - 메뉴 막대에 조용히 상주하는 아이콘 (Dock 아이콘 없음)
 - 아이콘을 누르면 아래로 부드럽게 내려오는 **말풍선 팝업**
   - 다른 앱으로 전환하거나 바깥을 클릭해도 닫히지 않고, 아이콘을 다시 누를 때까지 계속 떠 있습니다 (Esc로도 닫힘)
+  - 왼쪽·오른쪽·아래 가장자리와 오른쪽 아래 모서리 그립을 드래그해 크기 조절 (최소 300×420, 최대 가로 640 · 세로 화면 끝까지).
+    화살표는 항상 메뉴 막대 아이콘을 가리키고, 크기는 기억됩니다. 그립 더블클릭 또는 설정 → "기본값으로"
 - 클립보드 기록
   - ⌘C 로 복사한 텍스트 · 이미지 · 파일(Finder)을 모두 저장
   - **어떤 앱에서** 복사했는지 앱 아이콘과 이름으로 표시
@@ -79,6 +81,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
 | `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
 | `ATFM_SNAPSHOT_MINI=/path.png` | 미니 플레이어 창을 PNG로 저장 |
+| `ATFM_DEBUG_RESIZE=left:-40,bottom:120` | 표시 직후 말풍선 크기 조절을 적용 (저장되지 않게 하려면 `ATFM_PANEL_HEIGHT`와 함께) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
 
 `Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.

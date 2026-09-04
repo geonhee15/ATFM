@@ -96,7 +96,7 @@ struct RootView: View {
                 case .ai:
                     GeminiChatView(chat: gemini)
                 case .settings:
-                    SettingsView(vm: viewModel)
+                    SettingsView(vm: viewModel, appState: appState)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -118,6 +118,115 @@ struct RootView: View {
             .padding(.bottom, 18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .leading) { ResizeEdge(axis: .horizontal, edge: .leading, appState: appState) }
+        .overlay(alignment: .trailing) { ResizeEdge(axis: .horizontal, edge: .trailing, appState: appState) }
+        .overlay(alignment: .bottom) { ResizeEdge(axis: .vertical, edge: .bottom, appState: appState) }
+        .overlay(alignment: .bottomTrailing) { ResizeGrip(appState: appState) }
+    }
+}
+
+// MARK: - Resize handles (the bubble has no title bar, so we do it ourselves)
+
+/// Tracks the mouse in screen coordinates so window moves during the drag don't distort the delta.
+@MainActor
+final class ResizeDragTracker {
+    private var last: CGPoint?
+
+    func step() -> CGSize {
+        let mouse = NSEvent.mouseLocation
+        defer { last = mouse }
+        guard let last else { return .zero }
+        return CGSize(width: mouse.x - last.x, height: mouse.y - last.y)   // screen coords: y grows upward
+    }
+
+    func end() { last = nil }
+}
+
+struct ResizeEdge: View {
+    enum Edge { case leading, trailing, bottom }
+    let axis: Axis
+    let edge: Edge
+    var appState: AppState
+    @State private var tracker = ResizeDragTracker()
+
+    var body: some View {
+        Color.clear
+            .frame(width: axis == .horizontal ? 6 : nil, height: axis == .vertical ? 6 : nil)
+            .frame(maxWidth: axis == .vertical ? .infinity : nil, maxHeight: axis == .horizontal ? .infinity : nil)
+            .padding(axis == .vertical ? .horizontal : .vertical, 18)   // leave the corners to the grip / rounded corners
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside {
+                    (axis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set()
+                } else {
+                    NSCursor.arrow.set()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { _ in
+                        let step = tracker.step()
+                        var delta = BubbleResizeDelta()
+                        switch edge {
+                        case .leading: delta.left = step.width
+                        case .trailing: delta.right = step.width
+                        case .bottom: delta.bottom = -step.height
+                        }
+                        appState.resizeBubble?(delta)
+                    }
+                    .onEnded { _ in
+                        tracker.end()
+                        NSCursor.arrow.set()
+                    }
+            )
+    }
+}
+
+struct ResizeGrip: View {
+    var appState: AppState
+    @State private var tracker = ResizeDragTracker()
+    @State private var hovering = false
+
+    var body: some View {
+        ZStack {
+            Path { path in
+                for i in 0..<3 {
+                    let offset = CGFloat(i) * 4
+                    path.move(to: CGPoint(x: 12 - offset, y: 12))
+                    path.addLine(to: CGPoint(x: 12, y: 12 - offset))
+                }
+            }
+            .stroke(Color.secondary.opacity(hovering ? 0.9 : 0.45), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+            .frame(width: 12, height: 12)
+        }
+        .frame(width: 22, height: 22, alignment: .bottomTrailing)
+        .padding(4)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            hovering = inside
+            if inside {
+                if #available(macOS 15.0, *) {
+                    NSCursor.frameResize(position: .bottomRight, directions: .all).set()
+                } else {
+                    NSCursor.crosshair.set()
+                }
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { _ in
+                    let step = tracker.step()
+                    appState.resizeBubble?(BubbleResizeDelta(right: step.width, bottom: -step.height))
+                }
+                .onEnded { _ in
+                    tracker.end()
+                    NSCursor.arrow.set()
+                }
+        )
+        .onTapGesture(count: 2) { appState.resetBubbleSize?() }
+        .help("드래그해서 크기 조절 · 더블클릭으로 기본 크기")
     }
 }
 

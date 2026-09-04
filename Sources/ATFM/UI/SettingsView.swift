@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @Bindable var vm: ClipboardViewModel
+    var appState: AppState
     @AppStorage(SettingsKey.maxItems) private var maxItems = 2000
     @AppStorage(SettingsKey.moveDuplicatesToTop) private var moveDuplicatesToTop = true
     @AppStorage(SettingsKey.captureImages) private var captureImages = true
@@ -46,9 +47,18 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             launchAtLoginRow
             rowDivider
+            bubbleSizeRow
+            rowDivider
             dataFolderRow
         }
         .card()
+    }
+
+    private var bubbleSizeRow: some View {
+        SettingsRow(title: "말풍선 크기", subtitle: "가장자리나 오른쪽 아래 모서리를 드래그해서 조절해요") {
+            Button("기본값으로") { appState.resetBubbleSize?() }
+                .controlSize(.small)
+        }
     }
 
     private var infoCard: some View {
