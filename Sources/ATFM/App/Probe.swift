@@ -40,7 +40,7 @@ enum Probe {
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
         let semaphore = DispatchSemaphore(value: 0)
-        Task {
+        Task.detached {
             do {
                 var received = ""
                 for try await chunk in GeminiAPI.stream(apiKey: "invalid-key-for-probe", model: GeminiChat.defaultModel,
