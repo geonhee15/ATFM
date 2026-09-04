@@ -35,6 +35,7 @@ enum GeminiError: LocalizedError {
 
 /// Minimal Gemini REST client (streaming via server-sent events).
 enum GeminiAPI {
+    static var debugLog: (String) -> Void = { _ in }
     private static let base = "https://generativelanguage.googleapis.com/v1beta"
     static let systemInstruction = "You are a concise assistant living in a small macOS menu-bar app. Answer briefly, use Markdown sparingly, and reply in the language the user writes in."
 
@@ -57,14 +58,18 @@ enum GeminiAPI {
                     ]
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+                    debugLog("stream: requesting")
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else { throw GeminiError.badResponse }
+                    debugLog("stream: status \(http.statusCode)")
                     if http.statusCode != 200 {
                         var raw = ""
                         for try await line in bytes.lines { raw += line }
+                        debugLog("stream: error body \(raw.count) chars")
                         throw GeminiError.http(http.statusCode, errorMessage(from: raw))
                     }
                     for try await line in bytes.lines {
+                        debugLog("stream: line \(line.prefix(60))")
                         guard line.hasPrefix("data:") else { continue }
                         let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
                         guard let data = payload.data(using: .utf8),

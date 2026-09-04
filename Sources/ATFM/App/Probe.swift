@@ -41,9 +41,23 @@ enum Probe {
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
         let semaphore = DispatchSemaphore(value: 0)
         Task.detached {
+            func log(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
+            log("gemini step: start")
+            GeminiAPI.debugLog = { log("  " + $0) }
+            do {
+                var probeRequest = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")!)
+                probeRequest.httpMethod = "POST"
+                probeRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                probeRequest.setValue("invalid-key-for-probe", forHTTPHeaderField: "x-goog-api-key")
+                probeRequest.httpBody = Data("{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}]}".utf8)
+                let (data, response) = try await URLSession.shared.data(for: probeRequest)
+                log("gemini step: data(for:) status \((response as? HTTPURLResponse)?.statusCode ?? -1) bytes \(data.count)")
+            } catch {
+                log("gemini step: data(for:) error \(error.localizedDescription)")
+            }
             do {
                 var received = ""
-                for try await chunk in GeminiAPI.stream(apiKey: "invalid-key-for-probe", model: GeminiChat.defaultModel,
+                for try await chunk in GeminiAPI.stream(apiKey: "invalid-key-for-probe", model: "gemini-2.5-flash",
                                                         history: [ChatMessage(id: UUID(), role: .user, text: "hi", date: Date())]) {
                     received += chunk
                 }
@@ -53,7 +67,7 @@ enum Probe {
             }
             semaphore.signal()
         }
-        _ = semaphore.wait(timeout: .now() + 20)
+        _ = semaphore.wait(timeout: .now() + 40)
         let handle = dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_NOW)
         print("corebrightness dlopen: \(handle != nil) \(handle == nil ? String(cString: dlerror()) : "")")
         if let cls = NSClassFromString("KeyboardBrightnessClient") as? NSObject.Type {
