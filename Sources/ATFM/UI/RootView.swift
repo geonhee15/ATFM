@@ -3,9 +3,11 @@ import SwiftUI
 enum AppTab: String, CaseIterable, Identifiable {
     case clipboard
     case checklist
+    case awake
     case system
     case network
     case actions
+    case ai
     case settings
 
     var id: String { rawValue }
@@ -14,9 +16,11 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .clipboard: return "doc.on.clipboard"
         case .checklist: return "checklist"
+        case .awake: return "moon.zzz"
         case .system: return "cpu"
         case .network: return "network"
         case .actions: return "bolt"
+        case .ai: return "bubble.left.and.text.bubble.right"
         case .settings: return "gearshape"
         }
     }
@@ -25,9 +29,11 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .clipboard: return "클립보드"
         case .checklist: return "체크리스트"
+        case .awake: return "절전 방지"
         case .system: return "시스템"
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
+        case .ai: return "간편 AI"
         case .settings: return "설정"
         }
     }
@@ -41,6 +47,8 @@ struct RootView: View {
     var speedTester: SpeedTester
     var quickActions: QuickActions
     var checklist: ChecklistStore
+    var keepAwake: KeepAwake
+    var gemini: GeminiChat
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -64,12 +72,16 @@ struct RootView: View {
                     ClipboardView(vm: viewModel)
                 case .checklist:
                     ChecklistView(store: checklist)
+                case .awake:
+                    KeepAwakeView(awake: keepAwake)
                 case .system:
                     SystemView(monitor: systemMonitor)
                 case .network:
                     NetworkView(monitor: networkMonitor, tester: speedTester)
                 case .actions:
                     QuickActionsView(appState: appState, quick: quickActions)
+                case .ai:
+                    GeminiChatView(chat: gemini)
                 case .settings:
                     SettingsView(vm: viewModel)
                 }
@@ -100,13 +112,13 @@ struct TabBar: View {
     @Binding var selection: AppTab
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             ForEach(AppTab.allCases) { tab in
                 Button {
                     withAnimation(.snappy(duration: 0.2)) { selection = tab }
                 } label: {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(selection == tab ? Color.accentColor : Color.secondary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 40)

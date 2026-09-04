@@ -39,6 +39,21 @@ enum Probe {
             print(String(format: "  %-28@ cpu %5.1f%%  mem %10@  energy %8@  procs %d  app=%@", a.name as NSString, a.cpuPercent, Format.memory(a.memoryBytes) as NSString, Format.milliwatts(a.energyMilliwatts) as NSString, a.processCount, (a.bundlePath != nil) ? "yes" : "no"))
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                var received = ""
+                for try await chunk in GeminiAPI.stream(apiKey: "invalid-key-for-probe", model: GeminiChat.defaultModel,
+                                                        history: [ChatMessage(id: UUID(), role: .user, text: "hi", date: Date())]) {
+                    received += chunk
+                }
+                print("gemini probe: unexpected success \(received.prefix(40))")
+            } catch {
+                print("gemini probe (invalid key → expected error): \(error.localizedDescription)")
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 20)
         let handle = dlopen("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness", RTLD_NOW)
         print("corebrightness dlopen: \(handle != nil) \(handle == nil ? String(cString: dlerror()) : "")")
         if let cls = NSClassFromString("KeyboardBrightnessClient") as? NSObject.Type {

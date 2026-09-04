@@ -19,6 +19,8 @@
 - 설정: 최대 보관 개수, 중복 항목 위로 올리기, 이미지/파일 저장 여부, 로그인 시 자동 실행
 - **체크리스트** 탭: 적고 Enter로 추가, 체크로 완료, 더블클릭 수정, 호버 ✕ 삭제, 완료 항목 접기/한 번에 지우기.
   `~/Library/Application Support/ATFM/checklist.json` 에 자동 저장
+- **절전 방지** 탭: 스위치 하나로 자동 잠자기 방지(계속 · 30분 ~ 8시간), 화면 켜 둠 옵션,
+  덮개를 닫아도 유지(`pmset disablesleep`, 관리자 암호 필요). ATFM 종료 시 자동 해제
 - **시스템** 탭
   - CPU(코어별 포함) · GPU · 배터리 사용량과 최근 1분 추이
   - CPU / 배터리 온도 (Apple Silicon 내부 센서, 권한 불필요)
@@ -34,6 +36,9 @@
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
   - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
+- **간편 AI** 탭: Gemini 미니 채팅. API 키를 한 번 넣으면 스트리밍으로 답하고, 모델 목록 불러오기/선택,
+  답변 복사, 대화 기록은 최근 20개까지 보관(넘치면 오래된 대화부터 자동 삭제).
+  키와 대화는 이 Mac에만 저장(`gemini-chats.json`)
 
 데이터는 `~/Library/Application Support/ATFM/clipboard.sqlite` 에 SQLite로 저장됩니다.
 
@@ -57,7 +62,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `system` · `network` · `actions` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `ai` · `settings`) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
 
 `Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.
@@ -74,10 +79,12 @@ Sources/ATFM
 ├── App/         진입점, 메뉴 막대 아이템, 말풍선 패널(NSPanel + NSVisualEffectView)
 ├── Clipboard/   모델, SQLite 저장소, 페이스트보드 감시, 뷰모델
 ├── Checklist/   체크리스트 저장소 (JSON)
+├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
+├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
-├── UI/          SwiftUI 화면 (루트/탭바, 클립보드, 체크리스트, 시스템, 네트워크, 빠른 동작, 설정)
+├── UI/          SwiftUI 화면 (탭별 화면 전부)
 └── Support/     설정 키, 앱 아이콘 캐시
 ```
 

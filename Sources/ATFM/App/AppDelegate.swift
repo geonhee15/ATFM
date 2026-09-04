@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let speedTester = SpeedTester()
     private let quickActions = QuickActions()
     private var checklist: ChecklistStore?
+    private let keepAwake = KeepAwake()
+    private var gemini: GeminiChat?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -50,9 +52,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let checklist = ChecklistStore(directory: store.directory)
         self.checklist = checklist
+        let gemini = GeminiChat(directory: store.directory)
+        gemini.copyToPasteboard = { [weak monitor] text in
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            monitor?.markOwnChange()
+        }
+        self.gemini = gemini
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
+                            keepAwake: keepAwake, gemini: gemini,
                             quit: { NSApp.terminate(nil) })
         let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
         let bubble = BubblePanelController(
@@ -75,6 +86,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let tabName = env["ATFM_TAB"], let initial = AppTab(rawValue: tabName) {
             appState.select(initial)
         }
+        // Debug hooks (dev only): start keep-awake / send a chat prompt right after launch.
+        if env["ATFM_DEBUG_AWAKE"] == "1" { keepAwake.setActive(true) }
+        if let prompt = env["ATFM_DEBUG_GEMINI_PROMPT"], !prompt.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                MainActor.assumeIsolated {
+                    gemini.draft = prompt
+                    gemini.send()
+                }
+            }
+        }
         if env["ATFM_AUTO_SHOW"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 MainActor.assumeIsolated { self.bubble?.show() }
@@ -93,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor?.stop()
         systemMonitor?.setActive(false)
         networkMonitor?.setActive(false)
+        keepAwake.setActive(false)
     }
 
     private func statusItemScreenRect() -> CGRect? {
