@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var systemMonitor: SystemMonitor?
     private var networkMonitor: NetworkMonitor?
     private let speedTester = SpeedTester()
+    private let quickActions = QuickActions()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -44,10 +45,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.networkMonitor = networkMonitor
         appState.systemMonitor = systemMonitor
         appState.networkMonitor = networkMonitor
+        appState.quickActions = quickActions
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quit: { NSApp.terminate(nil) })
+                            quickActions: quickActions, quit: { NSApp.terminate(nil) })
         let panelHeight = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "") ?? 640
         let bubble = BubblePanelController(
             size: NSSize(width: 372, height: panelHeight),
@@ -60,7 +62,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if visible { vm.presentationCount += 1 }
         }
         vm.onRequestKeyboardReturn = { [weak bubble] in bubble?.returnKeyboardFocus() }
+        appState.applyAppearance = { [weak bubble] mode in bubble?.apply(appearance: mode.nsAppearance) }
+        bubble.apply(appearance: appState.appearanceMode.nsAppearance)
         self.bubble = bubble
+        NSLog("ATFM: appearance mode %@ (bundle %@)", appState.appearanceMode.rawValue, Bundle.main.bundleIdentifier ?? "nil")
 
         let env = ProcessInfo.processInfo.environment
         if let tabName = env["ATFM_TAB"], let initial = AppTab(rawValue: tabName) {

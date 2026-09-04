@@ -26,6 +26,12 @@
   - 현재 다운로드/업로드 속도와 추이, 인터페이스 · IP, 세션 누적량
   - **앱별 사용량**: `nettop` 을 스트리밍해서 2초마다 앱별 ↓↑ 속도 표시
   - 속도 측정: Cloudflare 서버로 다운로드/업로드 Mbps 와 지연 시간 측정 (버튼을 눌렀을 때만)
+- **빠른 동작** 탭
+  - ATFM 다크 모드: 시스템 설정은 그대로 두고 이 창만 라이트/다크/시스템으로 전환
+  - 키보드 백라이트 켜기/끄기 (CoreBrightness, 권한 불필요)
+  - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
+  - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
+  - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
 
 데이터는 `~/Library/Application Support/ATFM/clipboard.sqlite` 에 SQLite로 저장됩니다.
 
@@ -49,7 +55,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `system` · `network` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `system` · `network` · `actions` · `settings`) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
 
 `Scripts/dev-run.sh system` 처럼 탭 이름을 주면 위 조합으로 실행하고 `build/snap-<tab>.png` 를 남깁니다.
@@ -67,7 +73,8 @@ Sources/ATFM
 ├── Clipboard/   모델, SQLite 저장소, 페이스트보드 감시, 뷰모델
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
-├── UI/          SwiftUI 화면 (루트/탭바, 클립보드, 시스템, 네트워크, 설정)
+├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
+├── UI/          SwiftUI 화면 (루트/탭바, 클립보드, 시스템, 네트워크, 빠른 동작, 설정)
 └── Support/     설정 키, 앱 아이콘 캐시
 ```
 

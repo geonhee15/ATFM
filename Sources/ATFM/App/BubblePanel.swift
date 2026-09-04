@@ -193,6 +193,11 @@ final class BubblePanelController {
         if isVisible { hide() } else { show() }
     }
 
+    /// nil follows the system; otherwise forces light/dark for this panel only.
+    func apply(appearance: NSAppearance?) {
+        panel.appearance = appearance
+    }
+
     func show() {
         guard let anchor = anchorProvider() else { return }
         let frame = targetFrame(anchor: anchor)
