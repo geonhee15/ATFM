@@ -8,6 +8,8 @@ struct ChecklistView: View {
     @State private var showDone = true
     @State private var confirmRemoveAll = false
     @State private var showArchive = ProcessInfo.processInfo.environment["ATFM_DEBUG_ARCHIVE"] == "1"
+    @State private var pendingDue: Date?
+    @State private var showDuePicker = false
     @State private var confirmClearArchive = false
     @State private var collapsedDays: Set<String> = []
     @FocusState private var inputFocused: Bool
@@ -77,6 +79,7 @@ struct ChecklistView: View {
                     } label: { Label("완료 항목 지우기", systemImage: "checkmark.circle") }
                     .disabled(store.doneItems.isEmpty)
                     Divider()
+                    Toggle("마감 임박 순으로 정렬", isOn: Binding(get: { store.sortByDue }, set: { store.sortByDue = $0 }))
                     Toggle("미완료는 다음 날로 넘기기", isOn: Binding(get: { store.carryOverUnfinished }, set: { store.carryOverUnfinished = $0 }))
                     Divider()
                     Button(role: .destructive) { confirmRemoveAll = true } label: {
@@ -111,6 +114,24 @@ struct ChecklistView: View {
                 .font(.system(size: 13))
                 .focused($inputFocused)
                 .onSubmit(addItem)
+            if let pendingDue {
+                DeadlineBadge(date: pendingDue, isDone: false, compact: true)
+                    .onTapGesture { showDuePicker = true }
+            }
+            Button {
+                showDuePicker.toggle()
+            } label: {
+                Image(systemName: pendingDue == nil ? "calendar.badge.plus" : "calendar")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(pendingDue == nil ? Color.secondary : Theme.accent)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("마감 설정")
+            .popover(isPresented: $showDuePicker, arrowEdge: .bottom) {
+                DeadlinePicker(date: pendingDue) { pendingDue = $0; showDuePicker = false }
+            }
         }
         .padding(.horizontal, 11)
         .frame(height: 36)
@@ -120,7 +141,9 @@ struct ChecklistView: View {
     private func addItem() {
         let text = newText
         newText = ""
-        withAnimation(.snappy(duration: 0.2)) { store.add(text) }
+        let due = pendingDue
+        pendingDue = nil
+        withAnimation(.snappy(duration: 0.2)) { store.add(text, dueAt: due) }
         inputFocused = true
     }
 
@@ -248,6 +271,7 @@ struct ChecklistView: View {
             onToggle: { withAnimation(.snappy(duration: 0.2)) { store.toggle(item.id) } },
             onDelete: { withAnimation(.snappy(duration: 0.2)) { store.remove(item.id) } },
             onArchive: item.isDone ? { withAnimation(.snappy(duration: 0.2)) { store.archive(item.id) } } : nil,
+            onSetDue: { date in withAnimation(.snappy(duration: 0.2)) { store.setDue(item.id, date) } },
             onBeginEdit: {
                 editingID = item.id
                 editingText = item.text
@@ -271,7 +295,7 @@ struct ChecklistView: View {
             Text("할 일을 적어두세요")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("위 칸에 입력하고 Enter · 더블클릭으로 수정\n날짜가 바뀌면 전날 목록은 보관함으로 옮겨져요")
+            Text("위 칸에 입력하고 Enter · 달력 버튼으로 마감 지정 · 더블클릭으로 수정\n날짜가 바뀌면 전날 목록은 보관함으로 옮겨져요")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -386,12 +410,17 @@ struct ArchivedRow: View {
             Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 15))
                 .foregroundStyle(item.isDone ? Theme.accent.opacity(0.7) : Color.secondary)
-            Text(item.text)
-                .font(.system(size: 13))
-                .strikethrough(item.isDone, color: .secondary)
-                .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.text)
+                    .font(.system(size: 13))
+                    .strikethrough(item.isDone, color: .secondary)
+                    .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
+                    .lineLimit(2)
+                if let due = item.dueAt {
+                    DeadlineBadge(date: due, isDone: true, compact: false)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 6) {
                 Button(action: onRestore) {
                     Image(systemName: "arrow.uturn.backward.circle.fill")
@@ -430,11 +459,13 @@ struct ChecklistRow: View {
     let onToggle: () -> Void
     let onDelete: () -> Void
     var onArchive: (() -> Void)? = nil
+    var onSetDue: ((Date?) -> Void)? = nil
     let onBeginEdit: () -> Void
     let onCommitEdit: () -> Void
     let onCancelEdit: () -> Void
 
     @State private var hovering = false
+    @State private var showDuePicker = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -457,15 +488,24 @@ struct ChecklistRow: View {
                         if !focused { onCommitEdit() }
                     }
             } else {
-                Text(item.text)
-                    .font(.system(size: 13))
-                    .strikethrough(item.isDone, color: .secondary)
-                    .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2, perform: onBeginEdit)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.text)
+                        .font(.system(size: 13))
+                        .strikethrough(item.isDone, color: .secondary)
+                        .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let due = item.dueAt {
+                        DeadlineBadge(date: due, isDone: item.isDone, compact: false)
+                            .onTapGesture { showDuePicker = true }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2, perform: onBeginEdit)
+                .popover(isPresented: $showDuePicker, arrowEdge: .bottom) {
+                    DeadlinePicker(date: item.dueAt) { onSetDue?($0); showDuePicker = false }
+                }
             }
 
             Spacer(minLength: 4)
@@ -496,6 +536,10 @@ struct ChecklistRow: View {
         .onHover { hovering = $0 }
         .contextMenu {
             Button(action: onBeginEdit) { Label("수정", systemImage: "pencil") }
+            Button { showDuePicker = true } label: { Label(item.dueAt == nil ? "마감 설정…" : "마감 변경…", systemImage: "calendar") }
+            if item.dueAt != nil {
+                Button { onSetDue?(nil) } label: { Label("마감 해제", systemImage: "calendar.badge.minus") }
+            }
             Button(action: onToggle) { Label(item.isDone ? "완료 취소" : "완료", systemImage: "checkmark.circle") }
             if let onArchive {
                 Button(action: onArchive) { Label("보관", systemImage: "archivebox") }
@@ -503,5 +547,87 @@ struct ChecklistRow: View {
             Divider()
             Button(role: .destructive, action: onDelete) { Label("삭제", systemImage: "trash") }
         }
+    }
+}
+
+
+/// "오늘 18:00" chip; red when overdue, orange within 24 h, gray otherwise / when done.
+struct DeadlineBadge: View {
+    let date: Date
+    let isDone: Bool
+    let compact: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    private var tone: Color {
+        if isDone { return .secondary }
+        let remaining = date.timeIntervalSinceNow
+        if remaining < 0 { return .red }
+        if remaining < 86_400 { return .orange }
+        return .secondary
+    }
+
+    var body: some View {
+        let overdue = !isDone && date < Date()
+        HStack(spacing: 3) {
+            Image(systemName: overdue ? "exclamationmark.circle.fill" : "clock")
+                .font(.system(size: 9, weight: .semibold))
+            Text((overdue ? "지남 · " : "") + Deadline.label(date))
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tone)
+        .padding(.horizontal, 6)
+        .padding(.vertical, compact ? 2 : 2)
+        .background(Capsule().fill(tone == .secondary ? Theme.chipFill(scheme) : tone.opacity(0.14)))
+    }
+}
+
+/// Popover: quick presets + a date/time picker, or clear.
+struct DeadlinePicker: View {
+    var date: Date?
+    var onPick: (Date?) -> Void
+    @State private var selection: Date
+
+    init(date: Date?, onPick: @escaping (Date?) -> Void) {
+        self.date = date
+        self.onPick = onPick
+        let fallback = Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: Date()) ?? Date()
+        _selection = State(initialValue: date ?? (fallback > Date() ? fallback : Calendar.current.date(byAdding: .day, value: 1, to: fallback)!))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("마감").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            VStack(spacing: 4) {
+                ForEach(Array(Deadline.presets().enumerated()), id: \.offset) { _, preset in
+                    Button {
+                        onPick(preset.date)
+                    } label: {
+                        HStack {
+                            Text(preset.title).font(.system(size: 12))
+                            Spacer()
+                            Text(Deadline.label(preset.date)).font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Divider()
+            DatePicker("직접 선택", selection: $selection, displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.compact)
+                .font(.system(size: 12))
+            HStack {
+                if date != nil {
+                    Button("마감 해제") { onPick(nil) }
+                }
+                Spacer()
+                Button("적용") { onPick(selection) }.buttonStyle(.borderedProminent)
+            }
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(width: 260)
     }
 }
