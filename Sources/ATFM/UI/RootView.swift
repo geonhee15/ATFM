@@ -7,7 +7,6 @@ enum AppTab: String, CaseIterable, Identifiable {
     case system
     case network
     case actions
-    case clap
     case convert
     case player
     case ai
@@ -23,7 +22,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "cpu"
         case .network: return "network"
         case .actions: return "bolt"
-        case .clap: return "hands.clap"
         case .convert: return "arrow.triangle.2.circlepath"
         case .player: return "music.note"
         case .ai: return "bubble.left.and.text.bubble.right"
@@ -39,7 +37,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "시스템"
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
-        case .clap: return "Security Protocol 1"
         case .convert: return "파일 변환"
         case .player: return "미니 플레이어"
         case .ai: return "간편 AI"
@@ -61,7 +58,6 @@ struct RootView: View {
     var converter: FileConverter
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
-    var clapLock: ClapLock
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -93,8 +89,6 @@ struct RootView: View {
                     NetworkView(monitor: networkMonitor, tester: speedTester)
                 case .actions:
                     QuickActionsView(appState: appState, quick: quickActions)
-                case .clap:
-                    ClapLockView(clap: clapLock)
                 case .convert:
                     ConvertView(converter: converter)
                 case .player:
@@ -241,7 +235,7 @@ struct TabBar: View {
 
     private var columns: Int {
         let count = AppTab.allCases.count
-        return count > 8 ? Int((Double(count) / 2).rounded(.up)) : count
+        return count > 10 ? Int((Double(count) / 2).rounded(.up)) : count
     }
 
     var body: some View {

@@ -57,7 +57,7 @@ struct SettingsView: View {
     }
 
     private var themeRow: some View {
-        SettingsRow(title: "테마", subtitle: ThemeManager.shared.current.subtitle + " · 말풍선, 미니 플레이어, SP1 잠금 화면에 적용") {
+        SettingsRow(title: "테마", subtitle: ThemeManager.shared.current.subtitle + " · 말풍선과 미니 플레이어에 적용") {
             Picker("", selection: Binding(get: { ThemeManager.shared.current }, set: { ThemeManager.shared.set($0) })) {
                 ForEach(AppTheme.allCases) { Text($0.title).tag($0) }
             }

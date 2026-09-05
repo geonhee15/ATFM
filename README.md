@@ -19,7 +19,7 @@
   - 삭제: 하나씩(hover 후 ✕), 선택해서 여러 개, 전체 삭제
   - 암호 관리자에서 복사한 비밀 값(`org.nspasteboard.ConcealedType`)은 기록하지 않음
 - 설정: 최대 보관 개수, 중복 항목 위로 올리기, 이미지/파일 저장 여부, 로그인 시 자동 실행,
-  **테마**(ATFM 기본 · JARVIS · 미드나이트 · 세이지 — 말풍선/미니 플레이어의 강조색·틴트·외관, 그리고 SP1 잠금 화면에 적용)
+  **테마**(ATFM 기본 · JARVIS · 미드나이트 · 세이지 — 말풍선/미니 플레이어의 강조색·틴트·외관)
 - **체크리스트** 탭: 적고 Enter로 추가, 체크로 완료, 더블클릭 수정, 호버 ✕ 삭제, 완료 항목 접기/한 번에 지우기.
   `~/Library/Application Support/ATFM/checklist.json` 에 자동 저장
   - **보관함**: 날짜가 바뀌면 전날 목록(완료·미완료 모두)이 그 날짜 아래로 자동 보관(앱이 꺼져 있었으면 다음 실행 때).
@@ -42,19 +42,6 @@
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
   - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
-- **Security Protocol 1** 탭(박수 잠금): 박수를 두 번 치면 **SP1 제스처 잠금**(셰이드 → UNLOCK → HUD 제스처 인증)을 걸고,
-  원하면 추가 동작(화면 잠금 · 화면 보호기 · 디스플레이 끄기)을 이어서 실행. SP1이 꺼져 있으면 자동 실행. 마이크만 사용, 소리 저장 없음
-  - **감지는 SP1 메커니즘 그대로**: 마이크 더블 클랩 + Apple Vision 손 추적(최근 3초 손 감지, 박수 구간 타이핑 자세 거부,
-    손이 모이는 비전 클랩은 소리가 있을 때만). 카메라 확인은 끌 수 있음(마이크만)
-  - **데몬 위임**: 섹션을 켜면 LaunchAgent의 SP1 데몬을 내리고(`launchctl bootout`) ATFM이 감지를 맡음. 박수 → SP1을 `--external`로
-    띄워 즉시 락다운, 해제되면 그 프로세스는 스스로 종료. 섹션을 끄거나 ATFM을 종료하면 데몬을 다시 올림(`bootstrap`)
-  - **잠금 화면 스타일**: JARVIS 원본(영화 HUD) / ATFM 심플(장식 없이 카메라 카드 · 손 스켈레톤 · 단계 점 · 홀드 바,
-    시스템 폰트 라벨, 강조색 둥근 "잠금 해제" 버튼). 색은 설정의 테마를 따름
-  - SP1 연동은 `~/Desktop/Important/Security-Protocol-1`의 `.sp1-trigger` 파일(락다운 요청)과 `theme.json`(색 + `style`)로
-    이뤄집니다 (SP1 쪽 커밋 `2d58e9b`, `ab7846c`). LaunchAgent `com.geonhee.security-protocol-1`로 실행/재시작
-  - [Security-Protocol-1](https://github.com/geonhee15/Security-Protocol-1)의 `AudioClapDetector`를 Swift로 이식(오디오 전용):
-    16ms 블록의 피크·RMS·광대역 비율로 온셋을 잡고, 짧은 감쇠 · 0.12~1초 간격 · 앞 0.6초/뒤 0.5초 고립 규칙으로 더블 클랩 판정
-  - 민감도 3단계, 테스트 모드(감지만 알림), 실시간 레벨 미터와 임계선, 5초 쿨다운. 켜면 마이크 권한을 한 번 묻습니다
 - **파일 변환** 탭: 파일을 끌어다 놓거나 골라서 한 번에 변환
   - 이미지 → PNG · JPEG · HEIC · AVIF · TIFF · GIF · BMP (품질 슬라이더, 최대 크기 축소, 회전 정보 반영). macOS ImageIO 사용
   - 영상 → MP4/MOV (H.264 · HEVC, 하드웨어 인코딩) · MKV · WebM(VP9) · 움직이는 GIF, 해상도/화질 선택, 영상에서 오디오만 추출
@@ -99,7 +86,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `clap` · `convert` · `player` · `ai` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
 | `ATFM_SNAPSHOT_MINI=/path.png` | 미니 플레이어 창을 PNG로 저장 |
 | `ATFM_DEBUG_RESIZE=left:-40,bottom:120` | 표시 직후 말풍선 크기 조절을 적용 (저장되지 않게 하려면 `ATFM_PANEL_HEIGHT`와 함께) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
@@ -120,7 +107,6 @@ Sources/ATFM
 ├── Checklist/   체크리스트 저장소 (JSON)
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
-├── ClapLock/    박수 감지기(이식) + AVAudioEngine 입력 + 잠금 컨트롤러
 ├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐)
 ├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널, LRCLIB 가사
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터

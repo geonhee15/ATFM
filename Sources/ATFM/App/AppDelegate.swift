@@ -20,7 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let converter = FileConverter()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
-    private let clapLock = ClapLock()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -72,9 +71,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
                             keepAwake: keepAwake, gemini: gemini, converter: converter,
-                            nowPlaying: nowPlaying, miniPlayer: miniPlayer, clapLock: clapLock,
+                            nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
-        clapLock.start()   // no-op unless the user enabled it
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
         let bubble = BubblePanelController(
             size: NSSize(width: BubblePanelController.defaultSize.width, height: heightOverride ?? BubblePanelController.defaultSize.height),
@@ -161,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Appearance + theme tint for every floating surface, and the palette export for Security-Protocol-1.
+    /// Appearance + theme tint for every floating surface.
     private func applyLook() {
         let theme = ThemeManager.shared.current
         let appearance = theme.forcedAppearance ?? appState.appearanceMode.nsAppearance
@@ -169,7 +167,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble?.apply(tint: theme.tint)
         miniPlayer?.apply(appearance: appearance)
         miniPlayer?.apply(tint: theme.tint)
-        SP1Bridge.shared.writeTheme(theme)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -179,7 +176,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keepAwake.setActive(false)
         converter.cancel()
         nowPlaying.stop()
-        clapLock.shutdown()
     }
 
     private func statusItemScreenRect() -> CGRect? {
