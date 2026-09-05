@@ -24,9 +24,15 @@ struct ClapLockView: View {
 
     private var header: some View {
         HStack {
-            Text("박수 잠금")
+            Text("Security Protocol 1")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
+            Text("박수 잠금")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Theme.chipFill(scheme)))
             Spacer()
             statusChip
         }

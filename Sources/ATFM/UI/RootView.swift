@@ -39,7 +39,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "시스템"
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
-        case .clap: return "박수 잠금"
+        case .clap: return "Security Protocol 1"
         case .convert: return "파일 변환"
         case .player: return "미니 플레이어"
         case .ai: return "간편 AI"
