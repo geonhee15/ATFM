@@ -123,6 +123,34 @@ enum Probe {
                 print("nowplaying: bridge resources missing")
             }
         }
+        if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_DOWNLOAD"] {
+            // ATFM_PROBE_DOWNLOAD="<url>|<dir>[|quality]" — real download through MediaDownloader, prints progress.
+            let parts = spec.components(separatedBy: "|")
+            if parts.count >= 2 {
+                let downloader = MediaDownloader()
+                print("download probe: yt-dlp=\(downloader.ytdlpPath ?? "missing")")
+                downloader.url = parts[0]
+                if parts.count > 2, let q = DownloadQuality(rawValue: parts[2]) { downloader.quality = q }
+                UserDefaults.standard.set(parts[1], forKey: "downloadDirectory")
+                let fresh = MediaDownloader()
+                fresh.url = parts[0]
+                fresh.quality = downloader.quality
+                fresh.start()
+                var lastPrinted = ""
+                let deadline = Date().addingTimeInterval(180)
+                while fresh.isBusy, Date() < deadline {
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+                    let line = "  \(fresh.phase) \(Int(fresh.progress * 100))% \(fresh.sizeText) \(fresh.speed) eta \(fresh.eta) title='\(fresh.title)'"
+                    if line != lastPrinted, fresh.phase == .downloading || fresh.phase == .merging { print(line); lastPrinted = line }
+                }
+                switch fresh.phase {
+                case .done: print("download probe: done → \(fresh.lastFile?.path ?? "-") (\(fresh.duration), \(fresh.resolution))")
+                case .failed(let m): print("download probe: failed: \(m)")
+                default: print("download probe: still \(fresh.phase) at timeout")
+                }
+                UserDefaults.standard.removeObject(forKey: "downloadDirectory")
+            }
+        }
         if let dir = ProcessInfo.processInfo.environment["ATFM_PROBE_CONVERT"] {
             Self.probeConversions(in: URL(fileURLWithPath: dir))
         }

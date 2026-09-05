@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
     private let converter = FileConverter()
+    private let downloader = MediaDownloader()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -70,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -175,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         networkMonitor?.setActive(false)
         keepAwake.setActive(false)
         converter.cancel()
+        downloader.cancel()
         nowPlaying.stop()
     }
 

@@ -44,7 +44,13 @@
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
   - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
-- **파일 변환** 탭: 파일을 끌어다 놓거나 골라서 한 번에 변환
+- **파일 변환 · 다운로드** 탭
+  - **링크 다운로드**: YouTube 등 링크를 붙여넣고 화질(최고 · H.264 호환 최고 · 1080p · 720p · MP3만)을 골라 저장.
+    Homebrew `yt-dlp` + ffmpeg로 최고 영상·오디오 스트림을 받아 MP4로 합칩니다. 진행률·속도·남은 시간, 중단, 완료 후
+    Finder/변환 목록 연계. 클립보드에 링크가 있으면 자동으로 채움
+  - 필요한 도구: `brew install yt-dlp deno ffmpeg` (deno는 YouTube JS 챌린지 해결용). YouTube는 기본 클라이언트의
+    DASH 주소가 도중에 403을 내는 일이 있어(yt-dlp#12482) 임베디드 플레이어 → 기본 → 모바일 웹 순으로 자동 재시도
+  - 파일을 끌어다 놓거나 골라서 한 번에 변환
   - 이미지 → PNG · JPEG · HEIC · AVIF · TIFF · GIF · BMP (품질 슬라이더, 최대 크기 축소, 회전 정보 반영). macOS ImageIO 사용
   - 영상 → MP4/MOV (H.264 · HEVC, 하드웨어 인코딩) · MKV · WebM(VP9) · 움직이는 GIF, 해상도/화질 선택, 영상에서 오디오만 추출
   - 오디오 → MP3 · M4A(AAC) · WAV · FLAC · AIFF · OGG(Opus), 비트레이트 선택
@@ -109,7 +115,7 @@ Sources/ATFM
 ├── Checklist/   체크리스트 저장소 (JSON)
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
-├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐)
+├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐) + yt-dlp 다운로더
 ├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널, LRCLIB 가사
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정

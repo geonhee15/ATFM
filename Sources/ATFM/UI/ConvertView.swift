@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ConvertView: View {
     @Bindable var converter: FileConverter
+    @Bindable var downloader: MediaDownloader
     @State private var dropTargeted = false
     @Environment(\.colorScheme) private var scheme
 
@@ -10,6 +11,7 @@ struct ConvertView: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
+                    DownloadCard(downloader: downloader, converter: converter)
                     dropZone
                     if converter.ffmpeg == nil { ffmpegHint }
                     ForEach(MediaKind.allCases) { kind in
@@ -28,7 +30,7 @@ struct ConvertView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("파일 변환")
+            Text("파일 변환 · 다운로드")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(converter.engineName)
@@ -320,6 +322,172 @@ struct ConvertRow: View {
             .buttonStyle(.plain)
             .opacity(hovering && !isQueueRunning ? 1 : 0)
             .help("목록에서 제거")
+        }
+    }
+}
+
+
+/// "링크 다운로드" card at the top of the convert tab (YouTube and anything yt-dlp handles).
+struct DownloadCard: View {
+    @Bindable var downloader: MediaDownloader
+    var converter: FileConverter
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Theme.accent)
+                Text("링크 다운로드").font(.system(size: 13, weight: .semibold))
+                Text("YouTube 등").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Spacer()
+                if downloader.isAvailable {
+                    qualityMenu
+                }
+            }
+            if downloader.isAvailable {
+                urlField
+                statusArea
+                footer
+            } else {
+                Text("yt-dlp가 없어요. 터미널에서 brew install yt-dlp 후 ATFM을 다시 실행하면 여기서 바로 받을 수 있어요.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .card()
+        .onAppear { downloader.pasteIfLink() }
+    }
+
+    private var qualityMenu: some View {
+        Menu {
+            Picker("화질", selection: $downloader.quality) {
+                ForEach(DownloadQuality.allCases) { q in
+                    Text(q.title).tag(q)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Text(downloader.quality.title).font(.system(size: 11, weight: .medium))
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Capsule().fill(Theme.chipFill(scheme)))
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .disabled(downloader.isBusy)
+    }
+
+    private var urlField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "link").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            TextField("https://www.youtube.com/watch?v=…", text: $downloader.url)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .disabled(downloader.isBusy)
+                .onSubmit { downloader.start() }
+            if !downloader.url.isEmpty, !downloader.isBusy {
+                Button { downloader.url = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            Button {
+                if let text = NSPasteboard.general.string(forType: .string) { downloader.url = text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            } label: {
+                Image(systemName: "doc.on.clipboard").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("클립보드의 링크 붙여넣기")
+            .disabled(downloader.isBusy)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.chipFill(scheme)))
+    }
+
+    @ViewBuilder
+    private var statusArea: some View {
+        switch downloader.phase {
+        case .idle:
+            Text(downloader.quality.subtitle).font(.system(size: 10)).foregroundStyle(.tertiary)
+        case .fetchingInfo:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("영상 정보 확인 중…").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        case .downloading, .merging:
+            VStack(alignment: .leading, spacing: 4) {
+                if !downloader.title.isEmpty {
+                    Text(downloader.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                }
+                ProgressView(value: downloader.phase == .merging ? 1 : downloader.progress).controlSize(.small)
+                HStack {
+                    Text(downloader.phase == .merging ? (downloader.quality == .audioMP3 ? "오디오 변환 중…" : "영상·오디오 합치는 중…")
+                         : "\(Int(downloader.progress * 100))% · \(downloader.sizeText)" + (downloader.speed.isEmpty ? "" : " · \(downloader.speed)") + (downloader.eta.isEmpty ? "" : " · 남은 \(downloader.eta)"))
+                        .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
+                    Spacer()
+                    Text(metaText).font(.system(size: 10)).foregroundStyle(.tertiary)
+                }
+            }
+        case .done:
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text(downloader.title.isEmpty ? "완료" : downloader.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                }
+                if let file = downloader.lastFile {
+                    HStack(spacing: 10) {
+                        Text(file.lastPathComponent).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button("Finder에서 보기") { downloader.reveal(file) }.buttonStyle(.link).font(.system(size: 11))
+                        Button("변환 목록에 추가") { converter.add(urls: [file]) }.buttonStyle(.link).font(.system(size: 11))
+                    }
+                }
+            }
+        case .failed(let message):
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
+                Text(message).font(.system(size: 11)).foregroundStyle(.red).lineLimit(3)
+            }
+        }
+    }
+
+    private var metaText: String {
+        var parts: [String] = []
+        if !downloader.duration.isEmpty { parts.append(downloader.duration) }
+        if !downloader.resolution.isEmpty, downloader.quality != .audioMP3 { parts.append(downloader.resolution) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Button {
+                downloader.chooseDirectory()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder").font(.system(size: 10))
+                    Text(downloader.outputDirectory.lastPathComponent).font(.system(size: 11))
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("저장 폴더 바꾸기: " + downloader.outputDirectory.path)
+            .disabled(downloader.isBusy)
+            Spacer()
+            if downloader.isBusy {
+                Button("중단") { downloader.cancel() }.controlSize(.small)
+            } else {
+                Button {
+                    downloader.start()
+                } label: {
+                    Label("다운로드", systemImage: "arrow.down.to.line")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(!MediaDownloader.looksLikeURL(downloader.url))
+            }
         }
     }
 }

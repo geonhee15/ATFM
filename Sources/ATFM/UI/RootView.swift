@@ -56,6 +56,7 @@ struct RootView: View {
     var keepAwake: KeepAwake
     var gemini: GeminiChat
     var converter: FileConverter
+    var downloader: MediaDownloader
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
     var quit: () -> Void
@@ -90,7 +91,7 @@ struct RootView: View {
                 case .actions:
                     QuickActionsView(appState: appState, quick: quickActions)
                 case .convert:
-                    ConvertView(converter: converter)
+                    ConvertView(converter: converter, downloader: downloader)
                 case .player:
                     NowPlayingTabView(monitor: nowPlaying, controller: miniPlayer)
                 case .ai:
