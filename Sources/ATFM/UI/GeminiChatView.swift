@@ -101,14 +101,14 @@ struct GeminiChatView: View {
     private var keyCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "key.fill").foregroundStyle(Color.accentColor)
+                Image(systemName: "key.fill").foregroundStyle(Theme.accent)
                 Text("Gemini API 키").font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if chat.hasAPIKey {
                     Button("닫기") { chat.showKeyEditor = false }
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Theme.accent)
                 }
             }
             SecureField(chat.hasAPIKey ? "새 키를 입력하면 교체됩니다" : "AIza… 로 시작하는 키", text: $keyDraft)
@@ -215,7 +215,7 @@ struct GeminiChatView: View {
 
     private func noticeBar(_ text: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "info.circle.fill").foregroundStyle(Color.accentColor)
+            Image(systemName: "info.circle.fill").foregroundStyle(Theme.accent)
             Text(text).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3)
             Spacer()
             Button {
@@ -269,7 +269,7 @@ struct GeminiChatView: View {
                 Button { chat.send() } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(chat.draft.isEmpty ? Color.secondary : Color.accentColor)
+                        .foregroundStyle(chat.draft.isEmpty ? Color.secondary : Theme.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -317,7 +317,7 @@ struct MessageBubble: View {
                 .textSelection(.enabled)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.accentColor))
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.accent))
         } else {
             Group {
                 if message.text.isEmpty && isStreaming {
@@ -332,7 +332,7 @@ struct MessageBubble: View {
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                         if let sources = message.sources, !sources.isEmpty {
-                            Text(MarkdownLite.sourcesLine(sources))
+                            Text(MarkdownLite.sourcesLine(sources, accent: Theme.accent))
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(3)

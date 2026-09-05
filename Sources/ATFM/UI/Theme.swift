@@ -1,7 +1,11 @@
 import SwiftUI
 
+@MainActor
 enum Theme {
     static let cardRadius: CGFloat = 12
+
+    /// Accent color of the selected skin (see AppTheme / ThemeManager).
+    static var accent: Color { ThemeManager.shared.current.accent }
 
     static func cardFill(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Color.white.opacity(0.07) : Color.white.opacity(0.58)

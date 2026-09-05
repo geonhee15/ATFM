@@ -77,6 +77,11 @@ enum Probe {
             print(String(format: "  %-28@ cpu %5.1f%%  mem %10@  energy %8@  procs %d  app=%@", a.name as NSString, a.cpuPercent, Format.memory(a.memoryBytes) as NSString, Format.milliwatts(a.energyMilliwatts) as NSString, a.processCount, (a.bundlePath != nil) ? "yes" : "no"))
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_SP1"] == "1" {
+            let bridge = SP1Bridge.shared
+            print("sp1: installed=\(bridge.isInstalled) running=\(bridge.isRunning()) dir=\(bridge.baseDir?.path ?? "-") app=\(bridge.appURL?.path ?? "-")")
+            print("sp1 theme export: \(ThemeManager.shared.current.sp1Theme["name"] ?? "-")")
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_CLAP"] == "1" {
             // Synthetic blocks (16 ms each): quiet floor, then patterns that must / must not count.
             func run(_ name: String, impulses: [Double], expect: Bool) {

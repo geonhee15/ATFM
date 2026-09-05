@@ -52,7 +52,7 @@ struct MiniPlayerView: View {
                 Button { controller.setLyricsExpanded(!controller.isLyricsExpanded) } label: {
                     Image(systemName: "music.mic")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(controller.isLyricsExpanded ? Color.accentColor : Color.secondary)
+                        .foregroundStyle(controller.isLyricsExpanded ? Theme.accent : Color.secondary)
                         .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.plain)
@@ -85,9 +85,9 @@ struct LyricsBox: View {
                 if lyrics.lyrics?.isSynced == true {
                     Text("싱크")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Theme.accent)
                         .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                        .background(Capsule().fill(Theme.accent.opacity(0.15)))
                 }
                 if let source = lyrics.lyrics?.source, source != "LRCLIB" {
                     Text(source).font(.system(size: 9)).foregroundStyle(.tertiary)
@@ -177,7 +177,7 @@ struct LyricsBox: View {
                 Text(lyrics.offsetLabel)
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(lyrics.offset == 0 ? Color.secondary : Color.accentColor)
+                    .foregroundStyle(lyrics.offset == 0 ? Color.secondary : Theme.accent)
                     .frame(minWidth: 38)
             }
             .buttonStyle(.plain)
@@ -321,7 +321,7 @@ struct ProgressLine: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
                     Capsule()
-                        .fill(Color.accentColor)
+                        .fill(Theme.accent)
                         .frame(width: duration > 0 ? geo.size.width * CGFloat(min(1, elapsed / duration)) : 0)
                 }
             }

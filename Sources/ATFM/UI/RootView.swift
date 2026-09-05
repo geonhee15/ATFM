@@ -252,12 +252,12 @@ struct TabBar: View {
                 } label: {
                     Image(systemName: tab.icon)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(selection == tab ? Color.accentColor : Color.secondary)
+                        .foregroundStyle(selection == tab ? Theme.accent : Color.secondary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(selection == tab ? Color.accentColor.opacity(0.16) : Color.clear)
+                                .fill(selection == tab ? Theme.accent.opacity(0.16) : Color.clear)
                         )
                         .contentShape(Rectangle())
                 }

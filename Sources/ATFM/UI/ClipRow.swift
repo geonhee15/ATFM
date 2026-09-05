@@ -24,7 +24,7 @@ struct ClipRow: View {
             if isSelecting {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 17))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(isSelected ? Theme.accent : Color.secondary)
                     .padding(.top, 2)
                     .transition(.scale.combined(with: .opacity))
             }
@@ -95,7 +95,7 @@ struct ClipRow: View {
     }
 
     private var rowBackground: Color {
-        if isSelected { return Color.accentColor.opacity(0.10) }
+        if isSelected { return Theme.accent.opacity(0.10) }
         if justCopied { return Color.green.opacity(0.10) }
         if hovering { return Theme.hoverFill(scheme) }
         return .clear

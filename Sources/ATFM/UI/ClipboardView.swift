@@ -124,7 +124,7 @@ struct ClipboardView: View {
                 } else {
                     Image(systemName: vm.kindFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(vm.kindFilter == nil ? Color.secondary : Color.accentColor)
+                        .foregroundStyle(vm.kindFilter == nil ? Color.secondary : Theme.accent)
                 }
             }
             .frame(width: 26, height: 26)

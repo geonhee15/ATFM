@@ -46,9 +46,11 @@ final class MiniPlayerController {
     let monitor: NowPlayingMonitor
     let lyrics: LyricsController
     @ObservationIgnored private var panel: NSPanel?
+    @ObservationIgnored private var container: MiniPlayerContainerView?
     @ObservationIgnored private var customOrigin: CGPoint?
     @ObservationIgnored private var programmaticMove = false
     @ObservationIgnored private var appearance: NSAppearance?
+    @ObservationIgnored private var tint: NSColor?
 
     private enum Key {
         static let enabled = "miniPlayerEnabled"
@@ -120,6 +122,11 @@ final class MiniPlayerController {
     func apply(appearance: NSAppearance?) {
         self.appearance = appearance
         panel?.appearance = appearance
+    }
+
+    func apply(tint: NSColor?) {
+        self.tint = tint
+        container?.tintColor = tint
     }
 
     /// Opens/closes the lyrics box. The window grows away from the nearest screen edge so it stays on screen.
@@ -227,7 +234,9 @@ final class MiniPlayerController {
         let hosting = NSHostingView(rootView: AnyView(MiniPlayerView(monitor: monitor, controller: self)))
         hosting.sizingOptions = []
         container.install(hosting: hosting)
+        container.tintColor = tint
         panel.contentView = container
+        self.container = container
 
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.panelDidMove() }
@@ -265,8 +274,16 @@ final class MiniPlayerController {
 /// Rounded translucent backdrop for the mini player (same technique as the bubble).
 final class MiniPlayerContainerView: NSView {
     private let effect = NSVisualEffectView()
+    private let tintView = PassthroughView()
+    private let tintMask = CAShapeLayer()
     private let radius: CGFloat = 16
     private var hosting: NSView?
+    var tintColor: NSColor? {
+        didSet {
+            tintView.layer?.backgroundColor = tintColor?.cgColor
+            tintView.isHidden = tintColor == nil
+        }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -275,6 +292,10 @@ final class MiniPlayerContainerView: NSView {
         effect.blendingMode = .behindWindow
         effect.state = .active
         addSubview(effect)
+        tintView.wantsLayer = true
+        tintView.layer?.mask = tintMask
+        tintView.isHidden = true
+        addSubview(tintView)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -292,6 +313,9 @@ final class MiniPlayerContainerView: NSView {
     override func layout() {
         super.layout()
         effect.frame = bounds
+        tintView.frame = bounds
+        tintMask.frame = bounds
+        tintMask.path = CGPath(roundedRect: bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
         hosting?.frame = bounds
         let r = radius
         effect.maskImage = NSImage(size: bounds.size, flipped: false) { rect in

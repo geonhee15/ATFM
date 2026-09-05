@@ -51,10 +51,23 @@ enum BubbleShape {
 
 // MARK: - Views
 
-/// Translucent "popover" material masked to the bubble outline.
+/// A view that never takes mouse events (used for decorative tint layers).
+final class PassthroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// Translucent "popover" material masked to the bubble outline, plus an optional theme tint.
 final class BubbleBackgroundView: NSView {
     var arrowX: CGFloat = 0 { didSet { needsLayout = true } }
+    var tintColor: NSColor? {
+        didSet {
+            tintView.layer?.backgroundColor = tintColor?.cgColor
+            tintView.isHidden = tintColor == nil
+        }
+    }
     private let effect = NSVisualEffectView()
+    private let tintView = PassthroughView()
+    private let tintMask = CAShapeLayer()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -62,6 +75,10 @@ final class BubbleBackgroundView: NSView {
         effect.blendingMode = .behindWindow
         effect.state = .active
         addSubview(effect)
+        tintView.wantsLayer = true
+        tintView.layer?.mask = tintMask
+        tintView.isHidden = true
+        addSubview(tintView)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -69,12 +86,15 @@ final class BubbleBackgroundView: NSView {
     override func layout() {
         super.layout()
         effect.frame = bounds
+        tintView.frame = bounds
         let ax = arrowX
         effect.maskImage = NSImage(size: bounds.size, flipped: false) { rect in
             NSColor.black.setFill()
             BubbleShape.path(in: rect, arrowX: ax).fill()
             return true
         }
+        tintMask.frame = bounds
+        tintMask.path = BubbleShape.path(in: bounds, arrowX: ax).cgPath
     }
 }
 
@@ -105,6 +125,10 @@ final class BubbleContainerView: NSView {
             background.arrowX = arrowX
             border.arrowX = arrowX
         }
+    }
+    var tintColor: NSColor? {
+        get { background.tintColor }
+        set { background.tintColor = newValue }
     }
     private let background = BubbleBackgroundView()
     private let border = BubbleBorderView()
@@ -224,6 +248,11 @@ final class BubblePanelController {
     /// nil follows the system; otherwise forces light/dark for this panel only.
     func apply(appearance: NSAppearance?) {
         panel.appearance = appearance
+    }
+
+    /// Theme tint over the blur (nil = plain material).
+    func apply(tint: NSColor?) {
+        container.tintColor = tint
     }
 
     func show() {

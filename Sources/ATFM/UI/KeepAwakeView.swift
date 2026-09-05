@@ -142,7 +142,7 @@ struct KeepAwakeView: View {
         HStack(spacing: 10) {
             Image(systemName: "moon.zzz.fill")
                 .font(.system(size: 18))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text(awake.remainingText ?? "").font(.system(size: 13, weight: .semibold)).monospacedDigit()
                 if let started = awake.startedAt {

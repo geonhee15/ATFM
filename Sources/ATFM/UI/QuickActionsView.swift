@@ -50,7 +50,7 @@ struct QuickActionsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "moon.fill")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accent)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("ATFM 다크 모드")
@@ -205,7 +205,7 @@ struct ActionRow<Trailing: View>: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)

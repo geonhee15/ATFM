@@ -20,6 +20,7 @@ struct ClapLockView: View {
             .padding(.bottom, 6)
         }
         .padding(.horizontal, 20)
+        .onAppear { clap.refreshSP1Status() }
     }
 
     private var header: some View {
@@ -55,10 +56,10 @@ struct ClapLockView: View {
             HStack(spacing: 12) {
                 Image(systemName: "hands.clap.fill")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accent)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("박수 두 번으로 \(clap.action.title)").font(.system(size: 14, weight: .semibold))
+                    Text("박수 두 번 → \(clap.actionSummary)").font(.system(size: 14, weight: .semibold))
                     Text("탁-탁! 하고 치면 바로 실행돼요. 마이크는 켜져 있는 동안만 듣습니다.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
@@ -91,7 +92,7 @@ struct ClapLockView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.08))
                     Capsule()
-                        .fill(clap.level >= threshold ? Color.orange : Color.accentColor)
+                        .fill(clap.level >= threshold ? Color.orange : Theme.accent)
                         .frame(width: geo.size.width * CGFloat(min(1, clap.level)))
                     Rectangle()
                         .fill(Color.red.opacity(0.7))
@@ -112,13 +113,34 @@ struct ClapLockView: View {
         }
     }
 
+    private var sp1Subtitle: String {
+        guard clap.sp1Installed else { return "Security-Protocol-1 프로젝트를 찾지 못했어요" }
+        return clap.sp1Running ? "실행 중 · 박수 시 셰이드 → UNLOCK → 제스처 인증" : "꺼져 있음 · 박수 시 자동으로 실행한 뒤 잠가요"
+    }
+
     private var optionsCard: some View {
         VStack(spacing: 0) {
-            optionRow("동작", "박수를 감지했을 때 실행") {
-                Picker("", selection: Binding(get: { clap.action }, set: { clap.setAction($0) })) {
-                    ForEach(ClapAction.allCases) { Text($0.title).tag($0) }
+            optionRow("Security Protocol 1 제스처 잠금", sp1Subtitle) {
+                HStack(spacing: 8) {
+                    if clap.sp1Installed, !clap.sp1Running {
+                        Button("실행") { clap.launchSP1() }.controlSize(.small)
+                    }
+                    Toggle("", isOn: Binding(get: { clap.useSP1 }, set: { clap.setUseSP1($0) }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .disabled(!clap.sp1Installed)
+                }
+            }
+            Divider().padding(.horizontal, 12)
+            optionRow("추가 동작", clap.useSP1 ? "SP1 잠금에 이어서 실행 (없음이면 SP1만)" : "SP1 없이 이 동작만 실행") {
+                Picker("", selection: Binding(get: { clap.extra }, set: { clap.setExtra($0) })) {
+                    ForEach(ClapExtraAction.allCases) { Text($0.title).tag($0) }
                 }
                 .labelsHidden().controlSize(.small).frame(width: 130)
+            }
+            if !clap.useSP1, clap.extra == .none {
+                Text("SP1 잠금과 추가 동작이 둘 다 꺼져 있어서 박수를 쳐도 아무 일도 안 일어나요.")
+                    .font(.system(size: 11)).foregroundStyle(.orange)
+                    .padding(.horizontal, 12).padding(.bottom, 8)
             }
             Divider().padding(.horizontal, 12)
             optionRow("민감도", "둔감할수록 크고 또렷한 박수만 인정") {
@@ -157,7 +179,7 @@ struct ClapLockView: View {
 
     private func noticeRow(_ text: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "hands.clap.fill").foregroundStyle(Color.accentColor)
+            Image(systemName: "hands.clap.fill").foregroundStyle(Theme.accent)
             Text(text).font(.system(size: 11)).foregroundStyle(.secondary)
             Spacer()
         }

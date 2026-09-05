@@ -105,7 +105,7 @@ struct ChecklistView: View {
         HStack(spacing: 8) {
             Image(systemName: "plus.circle.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(newText.isEmpty ? Color.secondary : Color.accentColor)
+                .foregroundStyle(newText.isEmpty ? Color.secondary : Theme.accent)
             TextField("할 일을 적고 Enter", text: $newText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
@@ -222,14 +222,14 @@ struct ChecklistView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Theme.accent)
                 .help("완료된 항목을 오늘 날짜로 보관함에 넣어요")
                 Button("지우기") {
                     withAnimation(.snappy(duration: 0.2)) { store.clearDone() }
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Theme.accent)
                 .padding(.leading, 6)
             }
             .padding(.horizontal, 4)
@@ -385,7 +385,7 @@ struct ArchivedRow: View {
         HStack(spacing: 10) {
             Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 15))
-                .foregroundStyle(item.isDone ? Color.accentColor.opacity(0.7) : Color.secondary)
+                .foregroundStyle(item.isDone ? Theme.accent.opacity(0.7) : Color.secondary)
             Text(item.text)
                 .font(.system(size: 13))
                 .strikethrough(item.isDone, color: .secondary)
@@ -396,7 +396,7 @@ struct ArchivedRow: View {
                 Button(action: onRestore) {
                     Image(systemName: "arrow.uturn.backward.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
                 .help("오늘 목록으로 되돌리기")
@@ -442,7 +442,7 @@ struct ChecklistRow: View {
             Button(action: onToggle) {
                 Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18))
-                    .foregroundStyle(item.isDone ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(item.isDone ? Theme.accent : Color.secondary)
             }
             .buttonStyle(.plain)
 
@@ -475,7 +475,7 @@ struct ChecklistRow: View {
                     Button(action: onArchive) {
                         Image(systemName: "archivebox.circle.fill")
                             .font(.system(size: 14))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.plain)
                     .help("보관함(오늘 날짜)으로 보관")

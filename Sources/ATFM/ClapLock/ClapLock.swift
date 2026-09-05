@@ -2,11 +2,13 @@ import AVFoundation
 import AppKit
 import Observation
 
-enum ClapAction: String, CaseIterable, Identifiable {
-    case lock, screensaver, displayOff
+/// Something to do in addition to (or instead of) the Security-Protocol-1 lockdown.
+enum ClapExtraAction: String, CaseIterable, Identifiable {
+    case none, lock, screensaver, displayOff
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .none: return "없음"
         case .lock: return "화면 잠금"
         case .screensaver: return "화면 보호기"
         case .displayOff: return "디스플레이 끄기"
@@ -39,7 +41,10 @@ enum ClapSensitivity: String, CaseIterable, Identifiable {
 @Observable
 final class ClapLock {
     private(set) var isEnabled: Bool
-    private(set) var action: ClapAction
+    /// Fire Security-Protocol-1's gesture lockdown (shade + UNLOCK + HUD auth).
+    private(set) var useSP1: Bool
+    private(set) var extra: ClapExtraAction
+    private(set) var sp1Running = false
     private(set) var sensitivity: ClapSensitivity
     private(set) var testMode: Bool
     private(set) var isListening = false
@@ -63,7 +68,8 @@ final class ClapLock {
 
     private enum Key {
         static let enabled = "clapLockEnabled"
-        static let action = "clapLockAction"
+        static let useSP1 = "clapLockUseSP1"
+        static let extra = "clapLockExtraAction"
         static let sensitivity = "clapLockSensitivity"
         static let test = "clapLockTestMode"
     }
@@ -71,10 +77,34 @@ final class ClapLock {
     init() {
         let defaults = UserDefaults.standard
         isEnabled = defaults.bool(forKey: Key.enabled)
-        action = ClapAction(rawValue: defaults.string(forKey: Key.action) ?? "") ?? .lock
+        let installed = SP1Bridge.shared.isInstalled
+        useSP1 = (defaults.object(forKey: Key.useSP1) as? Bool) ?? installed
+        extra = ClapExtraAction(rawValue: defaults.string(forKey: Key.extra) ?? "") ?? (installed ? .none : .lock)
         sensitivity = ClapSensitivity(rawValue: defaults.string(forKey: Key.sensitivity) ?? "") ?? .normal
         testMode = defaults.bool(forKey: Key.test)
+        sp1Running = SP1Bridge.shared.isRunning()
         applySensitivity()
+    }
+
+    var sp1Installed: Bool { SP1Bridge.shared.isInstalled }
+
+    /// Human-readable "what happens on a double clap".
+    var actionSummary: String {
+        var parts: [String] = []
+        if useSP1 { parts.append("Security Protocol 1 잠금") }
+        if extra != .none { parts.append(extra.title) }
+        return parts.isEmpty ? "(동작 없음)" : parts.joined(separator: " + ")
+    }
+
+    func refreshSP1Status() {
+        sp1Running = SP1Bridge.shared.isRunning()
+    }
+
+    func launchSP1() {
+        SP1Bridge.shared.launch()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            MainActor.assumeIsolated { self.refreshSP1Status() }
+        }
     }
 
     var isInCooldown: Bool { cooldownUntil.map { $0 > Date() } ?? false }
@@ -96,9 +126,14 @@ final class ClapLock {
         if on { start() } else { stop() }
     }
 
-    func setAction(_ value: ClapAction) {
-        action = value
-        UserDefaults.standard.set(value.rawValue, forKey: Key.action)
+    func setUseSP1(_ on: Bool) {
+        useSP1 = on
+        UserDefaults.standard.set(on, forKey: Key.useSP1)
+    }
+
+    func setExtra(_ value: ClapExtraAction) {
+        extra = value
+        UserDefaults.standard.set(value.rawValue, forKey: Key.extra)
     }
 
     func setSensitivity(_ value: ClapSensitivity) {
@@ -182,9 +217,13 @@ final class ClapLock {
         }
     }
 
+    @ObservationIgnored private var pollCount = 0
+
     private func poll() {
         let now = CACurrentMediaTime()
         noiseFloor = detector.floor
+        pollCount += 1
+        if pollCount % 20 == 0 { refreshSP1Status() }   // every 2 s
         awaitingSecond = detector.awaitingSecondClap(now: now)
         guard let (_, second) = detector.pollDouble(now: now) else { return }
         _ = second
@@ -196,12 +235,30 @@ final class ClapLock {
             lastNotice = "박수 감지! (테스트 모드라 잠그지 않았어요)"
             return
         }
-        lastNotice = "박수 감지 → \(action.title)"
-        perform(action)
+        lastNotice = "박수 감지 → \(actionSummary)"
+        performActions()
     }
 
-    private func perform(_ action: ClapAction) {
+    private func performActions() {
+        if useSP1 {
+            do {
+                try SP1Bridge.shared.triggerLockdown()
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+        guard extra != .none else { return }
+        // Let SP1's shade appear first so the native lock screen sits on top of it.
+        let delay: TimeInterval = useSP1 ? 0.8 : 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            MainActor.assumeIsolated { self.perform(self.extra) }
+        }
+    }
+
+    private func perform(_ action: ClapExtraAction) {
         switch action {
+        case .none:
+            break
         case .lock:
             do { try ScreenControl.lockScreen() } catch { lastError = error.localizedDescription }
         case .screensaver:

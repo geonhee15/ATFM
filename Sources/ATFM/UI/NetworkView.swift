@@ -96,7 +96,7 @@ struct NetworkView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Theme.accent)
                 .frame(maxWidth: .infinity)
             }
         }

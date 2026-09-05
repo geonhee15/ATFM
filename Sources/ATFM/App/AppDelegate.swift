@@ -108,14 +108,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated { bubble.applyResize(delta) }
             }
         }
-        appState.applyAppearance = { [weak bubble, weak miniPlayer] mode in
-            bubble?.apply(appearance: mode.nsAppearance)
-            miniPlayer?.apply(appearance: mode.nsAppearance)
-        }
-        bubble.apply(appearance: appState.appearanceMode.nsAppearance)
-        miniPlayer.apply(appearance: appState.appearanceMode.nsAppearance)
+        appState.applyAppearance = { [weak self] _ in self?.applyLook() }
+        ThemeManager.shared.onChange = { [weak self] _ in self?.applyLook() }
         self.bubble = bubble
-        NSLog("ATFM: appearance mode %@ (bundle %@)", appState.appearanceMode.rawValue, Bundle.main.bundleIdentifier ?? "nil")
+        applyLook()
+        NSLog("ATFM: appearance mode %@, theme %@ (bundle %@)", appState.appearanceMode.rawValue,
+              ThemeManager.shared.current.rawValue, Bundle.main.bundleIdentifier ?? "nil")
 
         if let tabName = env["ATFM_TAB"], let initial = AppTab(rawValue: tabName) {
             appState.select(initial)
@@ -161,6 +159,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated { self.bubble?.writeSnapshot(to: snapshotPath) }
             }
         }
+    }
+
+    /// Appearance + theme tint for every floating surface, and the palette export for Security-Protocol-1.
+    private func applyLook() {
+        let theme = ThemeManager.shared.current
+        let appearance = theme.forcedAppearance ?? appState.appearanceMode.nsAppearance
+        bubble?.apply(appearance: appearance)
+        bubble?.apply(tint: theme.tint)
+        miniPlayer?.apply(appearance: appearance)
+        miniPlayer?.apply(tint: theme.tint)
+        SP1Bridge.shared.writeTheme(theme)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

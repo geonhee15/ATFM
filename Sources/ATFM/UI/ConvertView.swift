@@ -81,10 +81,10 @@ struct ConvertView: View {
         VStack(spacing: 6) {
             Image(systemName: "arrow.down.doc")
                 .font(.system(size: 26, weight: .light))
-                .foregroundStyle(dropTargeted ? Color.accentColor : Color.secondary)
+                .foregroundStyle(dropTargeted ? Theme.accent : Color.secondary)
             Text(dropTargeted ? "여기에 놓으세요" : "파일을 여기에 끌어다 놓거나 클릭해서 선택")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(dropTargeted ? Color.accentColor : Color.primary)
+                .foregroundStyle(dropTargeted ? Theme.accent : Color.primary)
             Text("이미지 · 영상 · 오디오 · 여러 개 한 번에")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
@@ -94,9 +94,9 @@ struct ConvertView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                .foregroundStyle(dropTargeted ? Color.accentColor : Color.secondary.opacity(0.5))
+                .foregroundStyle(dropTargeted ? Theme.accent : Color.secondary.opacity(0.5))
         )
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(dropTargeted ? Color.accentColor.opacity(0.08) : Theme.cardFill(scheme)))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(dropTargeted ? Theme.accent.opacity(0.08) : Theme.cardFill(scheme)))
         .contentShape(Rectangle())
         .onTapGesture { converter.chooseFiles() }
         .dropDestination(for: URL.self) { urls, _ in
@@ -107,7 +107,7 @@ struct ConvertView: View {
 
     private var ffmpegHint: some View {
         HStack(spacing: 8) {
-            Image(systemName: "info.circle.fill").foregroundStyle(Color.accentColor)
+            Image(systemName: "info.circle.fill").foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text("ffmpeg가 없어서 영상은 MP4/MOV, 오디오는 M4A만 됩니다.").font(.system(size: 11))
                 Text("터미널에서 brew install ffmpeg 후 ATFM을 다시 실행하면 MP3 · MKV · WebM · FLAC 등이 추가돼요.")
@@ -124,7 +124,7 @@ struct ConvertView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    Image(systemName: kind.symbol).foregroundStyle(Color.accentColor)
+                    Image(systemName: kind.symbol).foregroundStyle(Theme.accent)
                     Text("\(kind.title) \(items.count)개").font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Image(systemName: "arrow.right").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
@@ -307,7 +307,7 @@ struct ConvertRow: View {
         switch item.status {
         case .done(let url):
             Button { onReveal(url) } label: {
-                Image(systemName: "magnifyingglass.circle.fill").font(.system(size: 16)).foregroundStyle(Color.accentColor)
+                Image(systemName: "magnifyingglass.circle.fill").font(.system(size: 16)).foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
             .help("Finder에서 보기")

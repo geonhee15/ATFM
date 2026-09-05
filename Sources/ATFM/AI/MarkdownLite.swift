@@ -57,12 +57,12 @@ enum MarkdownLite {
     }
 
     /// "출처: title · title" with clickable links.
-    static func sourcesLine(_ sources: [WebSource]) -> AttributedString {
+    static func sourcesLine(_ sources: [WebSource], accent: Color) -> AttributedString {
         var result = AttributedString("출처: ")
         for (index, source) in sources.prefix(5).enumerated() {
             var link = AttributedString(source.title)
             link.link = URL(string: source.uri)
-            link.swiftUI.foregroundColor = .accentColor
+            link.swiftUI.foregroundColor = accent
             result += link
             if index < min(sources.count, 5) - 1 { result += AttributedString(" · ") }
         }
