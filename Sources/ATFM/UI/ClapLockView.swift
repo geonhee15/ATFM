@@ -12,7 +12,7 @@ struct ClapLockView: View {
                 optionsCard
                 if let notice = clap.lastNotice { noticeRow(notice) }
                 if let error = clap.lastError { errorRow(error) }
-                Text("Security-Protocol-1의 박수 감지 알고리즘을 오디오 전용으로 옮겼어요. 짧고 크고 넓은 대역의 소리 두 번이 0.12~1초 간격으로, 앞뒤가 조용할 때만 인정합니다. 키보드 연타나 말소리는 걸러져요.")
+                Text("Security-Protocol-1의 더블 클랩 감지(오디오 + 비전 융합)를 그대로 옮겼어요. 짧고 크고 넓은 대역의 소리 두 번이 0.12~1초 간격으로 앞뒤가 조용할 때만 인정하고, 카메라가 켜져 있으면 최근 3초 안에 손이 보였는지와 박수 구간 동안 두 손이 떨어져 있었는지(타이핑 자세)로 한 번 더 거릅니다.")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 4)
@@ -115,7 +115,18 @@ struct ClapLockView: View {
 
     private var sp1Subtitle: String {
         guard clap.sp1Installed else { return "Security-Protocol-1 프로젝트를 찾지 못했어요" }
-        return clap.sp1Running ? "실행 중 · 박수 시 셰이드 → UNLOCK → 제스처 인증" : "꺼져 있음 · 박수 시 자동으로 실행한 뒤 잠가요"
+        if clap.lockdownActive { return "잠금 진행 중 · 해제되면 SP1 프로세스가 종료돼요" }
+        if clap.sp1Owned { return "ATFM이 감지 담당 · 백그라운드 SP1 데몬은 잠시 내려 둠 (끄면 복구)" }
+        return clap.sp1Running ? "SP1 데몬 실행 중 · 켜면 ATFM이 감지를 넘겨받아요" : "꺼져 있음 · 박수 시 SP1을 띄워 잠가요"
+    }
+
+    private var cameraSubtitle: String {
+        if !clap.useCamera { return "마이크만으로 판단해요 (손 확인 없음)" }
+        if clap.cameraPermission == .denied || clap.cameraPermission == .restricted { return "카메라 권한이 없어요" }
+        if !clap.isWatching { return "켜면 카메라로 손을 보고 타이핑·TV 소리를 걸러요" }
+        if clap.handCount > 0 { return "손 \(clap.handCount)개 보임 · 박수 소리와 함께 확인" }
+        if clap.secondsSinceHands.isFinite, clap.secondsSinceHands < 3 { return "방금 손을 봤어요" }
+        return "손이 안 보이면 박수 소리를 무시해요 (3초 규칙)"
     }
 
     private var optionsCard: some View {
@@ -128,6 +139,16 @@ struct ClapLockView: View {
                     Toggle("", isOn: Binding(get: { clap.useSP1 }, set: { clap.setUseSP1($0) }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small)
                         .disabled(!clap.sp1Installed)
+                }
+            }
+            Divider().padding(.horizontal, 12)
+            optionRow("카메라로 손 확인", cameraSubtitle) {
+                HStack(spacing: 8) {
+                    if clap.cameraPermission == .denied || clap.cameraPermission == .restricted {
+                        Button("설정") { clap.openCameraSettings() }.controlSize(.small)
+                    }
+                    Toggle("", isOn: Binding(get: { clap.useCamera }, set: { clap.setUseCamera($0) }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
                 }
             }
             Divider().padding(.horizontal, 12)

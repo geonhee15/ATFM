@@ -112,6 +112,13 @@ final class ClapDetector {
         return (t1, t2)
     }
 
+    /// Was there an audio onset within `tolerance` seconds of `time`? (vision double-clap confirmation)
+    func onsetNear(_ time: Double, tolerance: Double) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if lastOnset > 0, abs(lastOnset - time) <= tolerance { return true }
+        return onsets.contains { abs($0 - time) <= tolerance }
+    }
+
     /// True while the first clap of a pair is waiting for its partner (for the "한 번 더" hint).
     func awaitingSecondClap(now: Double) -> Bool {
         lock.lock(); defer { lock.unlock() }

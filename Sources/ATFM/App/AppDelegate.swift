@@ -179,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keepAwake.setActive(false)
         converter.cancel()
         nowPlaying.stop()
-        clapLock.stop()
+        clapLock.shutdown()
     }
 
     private func statusItemScreenRect() -> CGRect? {

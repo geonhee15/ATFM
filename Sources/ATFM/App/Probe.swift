@@ -81,6 +81,45 @@ enum Probe {
             let bridge = SP1Bridge.shared
             print("sp1: installed=\(bridge.isInstalled) running=\(bridge.isRunning()) dir=\(bridge.baseDir?.path ?? "-") app=\(bridge.appURL?.path ?? "-")")
             print("sp1 theme export: \(ThemeManager.shared.current.sp1Theme["name"] ?? "-")")
+            if ProcessInfo.processInfo.environment["ATFM_PROBE_SP1_HANDOFF"] == "1" {
+                print("sp1 handoff: loaded=\(bridge.isDaemonLoaded()) running=\(bridge.isRunning()) → suspend")
+                bridge.suspendDaemon()
+                print("sp1 handoff: after suspend loaded=\(bridge.isDaemonLoaded()) running=\(bridge.isRunning()) suspended=\(bridge.daemonSuspended)")
+                bridge.resumeDaemon()
+                Thread.sleep(forTimeInterval: 4)
+                print("sp1 handoff: after resume loaded=\(bridge.isDaemonLoaded()) running=\(bridge.isRunning()) suspended=\(bridge.daemonSuspended)")
+            }
+        }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_VISION"] == "1" {
+            // Synthetic two-hand frames at 30 fps: apart → fast approach (contact) → apart → contact again.
+            func hand(x: CGFloat) -> HandLandmarks {
+                HandLandmarks(wrist: CGPoint(x: x, y: 0.6), indexMCP: CGPoint(x: x - 0.03, y: 0.5),
+                              middleMCP: CGPoint(x: x, y: 0.5), ringMCP: CGPoint(x: x + 0.03, y: 0.5), littleMCP: CGPoint(x: x + 0.05, y: 0.52))
+            }
+            let vision = VisionClapDetector()
+            var t = 0.0
+            var fired = false
+            func frames(_ seconds: Double, distance: CGFloat) {
+                for _ in 0..<Int(seconds * 30) { t += 1.0 / 30; if vision.update(hands: [hand(x: 0.5 - distance / 2), hand(x: 0.5 + distance / 2)], now: t) { fired = true } }
+            }
+            // hand size = 0.1 → separation ratio = distance / 0.1
+            frames(0.5, distance: 0.30)                 // apart (ratio 3)
+            print("vision probe: after apart claps=\(vision.claps) \(vision.debugState)")
+            for d in [0.30, 0.25, 0.20, 0.15, 0.10, 0.05] { t += 1.0 / 30; if vision.update(hands: [hand(x: 0.5 - d / 2), hand(x: 0.5 + d / 2)], now: t) { fired = true } }
+            print("vision probe: after approach 1 claps=\(vision.claps) \(vision.debugState)")
+            frames(0.3, distance: 0.20)                 // re-arm
+            print("vision probe: after re-arm claps=\(vision.claps) \(vision.debugState)")
+            for d in [0.20, 0.15, 0.10, 0.05] { t += 1.0 / 30; if vision.update(hands: [hand(x: 0.5 - d / 2), hand(x: 0.5 + d / 2)], now: t) { fired = true } }
+            print("vision probe: after approach 2 claps=\(vision.claps) \(vision.debugState)")
+            print("vision probe: double clap → \(fired ? "fired ✓" : "nothing ✗")")
+            let typing = VisionClapDetector()
+            var t2 = 0.0
+            for _ in 0..<30 { t2 += 1.0 / 30; typing.update(hands: [hand(x: 0.3), hand(x: 0.7)], now: t2) }   // ratio 4 = apart
+            print("vision probe: typing posture over 1s → \(typing.typingPosture(from: 0, to: 1) ? "rejects ✓" : "no ✗")")
+            let clapping = VisionClapDetector()
+            var t3 = 0.0
+            for i in 0..<30 { t3 += 1.0 / 30; clapping.update(hands: i % 2 == 0 ? [hand(x: 0.5)] : [], now: t3) }   // hands merging/lost
+            print("vision probe: clap-ish posture → \(clapping.typingPosture(from: 0, to: 1) ? "rejects ✗" : "allows ✓")")
         }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_CLAP"] == "1" {
             // Synthetic blocks (16 ms each): quiet floor, then patterns that must / must not count.
