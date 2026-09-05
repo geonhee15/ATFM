@@ -131,6 +131,15 @@ struct ClapLockView: View {
                 }
             }
             Divider().padding(.horizontal, 12)
+            optionRow("잠금 화면 스타일", "심플은 그래프·효과를 빼고 애플식으로. 색은 테마(설정)를 따라요") {
+                let _ = clap.sp1StyleVersion
+                Picker("", selection: Binding(get: { clap.sp1Style }, set: { clap.setSP1Style($0) })) {
+                    ForEach(SP1LockStyle.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().controlSize(.small).frame(width: 170)
+                .disabled(!clap.sp1Installed)
+            }
+            Divider().padding(.horizontal, 12)
             optionRow("추가 동작", clap.useSP1 ? "SP1 잠금에 이어서 실행 (없음이면 SP1만)" : "SP1 없이 이 동작만 실행") {
                 Picker("", selection: Binding(get: { clap.extra }, set: { clap.setExtra($0) })) {
                     ForEach(ClapExtraAction.allCases) { Text($0.title).tag($0) }

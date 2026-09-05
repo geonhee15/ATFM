@@ -44,8 +44,10 @@
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
 - **Security Protocol 1** 탭(박수 잠금): 박수를 두 번 치면 **SP1 제스처 잠금**(셰이드 → UNLOCK → HUD 제스처 인증)을 걸고,
   원하면 추가 동작(화면 잠금 · 화면 보호기 · 디스플레이 끄기)을 이어서 실행. SP1이 꺼져 있으면 자동 실행. 마이크만 사용, 소리 저장 없음
-  - SP1 연동은 `~/Desktop/Important/Security-Protocol-1`의 `.sp1-trigger` 파일(락다운 요청)과 `theme.json`(HUD·UNLOCK 테마)로 이뤄집니다
-    (SP1 쪽 커밋 `2d58e9b`). LaunchAgent `com.geonhee.security-protocol-1`로 실행/재시작
+  - **잠금 화면 스타일**: JARVIS 원본(영화 HUD) / ATFM 심플(장식 없이 카메라 카드 · 손 스켈레톤 · 단계 점 · 홀드 바,
+    시스템 폰트 라벨, 강조색 둥근 "잠금 해제" 버튼). 색은 설정의 테마를 따름
+  - SP1 연동은 `~/Desktop/Important/Security-Protocol-1`의 `.sp1-trigger` 파일(락다운 요청)과 `theme.json`(색 + `style`)로
+    이뤄집니다 (SP1 쪽 커밋 `2d58e9b`, `ab7846c`). LaunchAgent `com.geonhee.security-protocol-1`로 실행/재시작
   - [Security-Protocol-1](https://github.com/geonhee15/Security-Protocol-1)의 `AudioClapDetector`를 Swift로 이식(오디오 전용):
     16ms 블록의 피크·RMS·광대역 비율로 온셋을 잡고, 짧은 감쇠 · 0.12~1초 간격 · 앞 0.6초/뒤 0.5초 고립 규칙으로 더블 클랩 판정
   - 민감도 3단계, 테스트 모드(감지만 알림), 실시간 레벨 미터와 임계선, 5초 쿨다운. 켜면 마이크 권한을 한 번 묻습니다

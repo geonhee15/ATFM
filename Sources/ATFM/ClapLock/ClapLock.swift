@@ -16,6 +16,12 @@ enum ClapExtraAction: String, CaseIterable, Identifiable {
     }
 }
 
+enum SP1LockStyle: String, CaseIterable, Identifiable {
+    case jarvis, simple
+    var id: String { rawValue }
+    var title: String { self == .jarvis ? "JARVIS 원본" : "ATFM 심플" }
+}
+
 enum ClapSensitivity: String, CaseIterable, Identifiable {
     case low, normal, high
     var id: String { rawValue }
@@ -87,6 +93,18 @@ final class ClapLock {
     }
 
     var sp1Installed: Bool { SP1Bridge.shared.isInstalled }
+
+    var sp1Style: SP1LockStyle {
+        SP1LockStyle(rawValue: SP1Bridge.shared.lockStyle) ?? .simple
+    }
+
+    /// Lock-screen look used by SP1 on the next lockdown (written to its theme.json right away).
+    func setSP1Style(_ style: SP1LockStyle) {
+        SP1Bridge.shared.lockStyle = style.rawValue
+        SP1Bridge.shared.writeTheme(ThemeManager.shared.current)
+        sp1StyleVersion += 1
+    }
+    private(set) var sp1StyleVersion = 0
 
     /// Human-readable "what happens on a double clap".
     var actionSummary: String {

@@ -11,8 +11,14 @@ final class SP1Bridge {
     let baseDir: URL?
     let scriptURL: URL?
     let appURL: URL?
+    /// "jarvis" = SP1's original cinematic HUD, "simple" = plain ATFM/Apple-style lock screens.
+    var lockStyle: String {
+        didSet { UserDefaults.standard.set(lockStyle, forKey: Self.styleKey) }
+    }
+    private static let styleKey = "sp1LockStyle"
 
     private init() {
+        lockStyle = UserDefaults.standard.string(forKey: Self.styleKey) ?? "simple"
         let home = FileManager.default.homeDirectoryForCurrentUser
         var script: URL?
         var app: URL?
@@ -82,7 +88,9 @@ final class SP1Bridge {
     /// Exports the ATFM theme so SP1's lockdown HUD and UNLOCK button use the same palette.
     func writeTheme(_ theme: AppTheme) {
         guard isInstalled, let themeFile else { return }
-        if let data = try? JSONSerialization.data(withJSONObject: theme.sp1Theme, options: [.prettyPrinted, .sortedKeys]) {
+        var payload = theme.sp1Theme
+        payload["style"] = lockStyle
+        if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: themeFile, options: .atomic)
         }
     }
