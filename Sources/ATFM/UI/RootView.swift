@@ -7,6 +7,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case system
     case network
     case actions
+    case clap
     case convert
     case player
     case ai
@@ -22,6 +23,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "cpu"
         case .network: return "network"
         case .actions: return "bolt"
+        case .clap: return "hands.clap"
         case .convert: return "arrow.triangle.2.circlepath"
         case .player: return "music.note"
         case .ai: return "bubble.left.and.text.bubble.right"
@@ -37,6 +39,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .system: return "시스템"
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
+        case .clap: return "박수 잠금"
         case .convert: return "파일 변환"
         case .player: return "미니 플레이어"
         case .ai: return "간편 AI"
@@ -58,6 +61,7 @@ struct RootView: View {
     var converter: FileConverter
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
+    var clapLock: ClapLock
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -89,6 +93,8 @@ struct RootView: View {
                     NetworkView(monitor: networkMonitor, tester: speedTester)
                 case .actions:
                     QuickActionsView(appState: appState, quick: quickActions)
+                case .clap:
+                    ClapLockView(clap: clapLock)
                 case .convert:
                     ConvertView(converter: converter)
                 case .player:
@@ -233,8 +239,13 @@ struct ResizeGrip: View {
 struct TabBar: View {
     @Binding var selection: AppTab
 
+    private var columns: Int {
+        let count = AppTab.allCases.count
+        return count > 8 ? Int((Double(count) / 2).rounded(.up)) : count
+    }
+
     var body: some View {
-        HStack(spacing: 1) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: columns), spacing: 1) {
             ForEach(AppTab.allCases) { tab in
                 Button {
                     withAnimation(.snappy(duration: 0.2)) { selection = tab }
@@ -243,7 +254,7 @@ struct TabBar: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(selection == tab ? Color.accentColor : Color.secondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
+                        .frame(height: 36)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(selection == tab ? Color.accentColor.opacity(0.16) : Color.clear)

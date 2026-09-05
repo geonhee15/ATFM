@@ -41,6 +41,10 @@
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
   - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
+- **박수 잠금** 탭: 박수를 두 번 치면 화면 잠금(또는 화면 보호기 · 디스플레이 끄기). 마이크만 사용, 소리 저장 없음
+  - [Security-Protocol-1](https://github.com/geonhee15/Security-Protocol-1)의 `AudioClapDetector`를 Swift로 이식(오디오 전용):
+    16ms 블록의 피크·RMS·광대역 비율로 온셋을 잡고, 짧은 감쇠 · 0.12~1초 간격 · 앞 0.6초/뒤 0.5초 고립 규칙으로 더블 클랩 판정
+  - 민감도 3단계, 테스트 모드(감지만 알림), 실시간 레벨 미터와 임계선, 5초 쿨다운. 켜면 마이크 권한을 한 번 묻습니다
 - **파일 변환** 탭: 파일을 끌어다 놓거나 골라서 한 번에 변환
   - 이미지 → PNG · JPEG · HEIC · AVIF · TIFF · GIF · BMP (품질 슬라이더, 최대 크기 축소, 회전 정보 반영). macOS ImageIO 사용
   - 영상 → MP4/MOV (H.264 · HEVC, 하드웨어 인코딩) · MKV · WebM(VP9) · 움직이는 GIF, 해상도/화질 선택, 영상에서 오디오만 추출
@@ -85,7 +89,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
-| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
+| `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `clap` · `convert` · `player` · `ai` · `settings`) |
 | `ATFM_SNAPSHOT_MINI=/path.png` | 미니 플레이어 창을 PNG로 저장 |
 | `ATFM_DEBUG_RESIZE=left:-40,bottom:120` | 표시 직후 말풍선 크기 조절을 적용 (저장되지 않게 하려면 `ATFM_PANEL_HEIGHT`와 함께) |
 | `ATFM_PANEL_HEIGHT=1040` | 말풍선 높이 (기본 640) |
@@ -106,6 +110,7 @@ Sources/ATFM
 ├── Checklist/   체크리스트 저장소 (JSON)
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
+├── ClapLock/    박수 감지기(이식) + AVAudioEngine 입력 + 잠금 컨트롤러
 ├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐)
 ├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널, LRCLIB 가사
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터

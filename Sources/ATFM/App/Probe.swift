@@ -77,6 +77,33 @@ enum Probe {
             print(String(format: "  %-28@ cpu %5.1f%%  mem %10@  energy %8@  procs %d  app=%@", a.name as NSString, a.cpuPercent, Format.memory(a.memoryBytes) as NSString, Format.milliwatts(a.energyMilliwatts) as NSString, a.processCount, (a.bundlePath != nil) ? "yes" : "no"))
         }
         print("uptime: \(UptimeProbe.format(UptimeProbe.uptime))")
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_CLAP"] == "1" {
+            // Synthetic blocks (16 ms each): quiet floor, then patterns that must / must not count.
+            func run(_ name: String, impulses: [Double], expect: Bool) {
+                let detector = ClapDetector()
+                var t = 0.0
+                func quiet(_ seconds: Double) {
+                    for _ in 0..<max(0, Int(seconds / ClapDetector.blockDuration)) { t += ClapDetector.blockDuration; detector.process(now: t, peak: 0.01, rms: 0.004, hf: 0.3) }
+                }
+                func clap() {
+                    t += ClapDetector.blockDuration; detector.process(now: t, peak: 0.6, rms: 0.30, hf: 0.6)
+                    for k in 0..<10 { t += ClapDetector.blockDuration; detector.process(now: t, peak: 0.2 / Double(k + 1), rms: k < 2 ? 0.25 : 0.02, hf: 0.5) }
+                }
+                quiet(1.5)
+                var last = 0.0
+                for (i, at) in impulses.enumerated() {
+                    if i > 0 { quiet(at - last - 11 * ClapDetector.blockDuration) }
+                    clap(); last = at
+                }
+                var fired = false
+                for _ in 0..<60 { quiet(ClapDetector.blockDuration); if detector.pollDouble(now: t) != nil { fired = true } }
+                print("clap probe: \(name) → \(fired ? "double clap" : "nothing") \(fired == expect ? "✓" : "✗ (expected \(expect ? "double" : "nothing"))")")
+            }
+            run("double clap 0.4s apart", impulses: [0, 0.4], expect: true)
+            run("single clap", impulses: [0], expect: false)
+            run("typing burst 5 × 0.2s", impulses: [0, 0.2, 0.4, 0.6, 0.8], expect: false)
+            run("too slow 1.6s", impulses: [0, 1.6], expect: false)
+        }
         if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_LYRICS"] {
             let parts = spec.components(separatedBy: "|")
             if parts.count >= 2 {

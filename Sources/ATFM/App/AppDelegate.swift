@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let converter = FileConverter()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
+    private let clapLock = ClapLock()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenuBuilder.install()
@@ -71,8 +72,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
                             keepAwake: keepAwake, gemini: gemini, converter: converter,
-                            nowPlaying: nowPlaying, miniPlayer: miniPlayer,
+                            nowPlaying: nowPlaying, miniPlayer: miniPlayer, clapLock: clapLock,
                             quit: { NSApp.terminate(nil) })
+        clapLock.start()   // no-op unless the user enabled it
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
         let bubble = BubblePanelController(
             size: NSSize(width: BubblePanelController.defaultSize.width, height: heightOverride ?? BubblePanelController.defaultSize.height),
@@ -168,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keepAwake.setActive(false)
         converter.cancel()
         nowPlaying.stop()
+        clapLock.stop()
     }
 
     private func statusItemScreenRect() -> CGRect? {
