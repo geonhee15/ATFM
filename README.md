@@ -51,6 +51,13 @@
   - 최근 결과 목록에서 클릭 한 번으로 다시 복사
   - **단축키**: 기본 ⌘⇧1(텍스트 복사) · ⌘⇧2(색상 추출). 다른 앱을 쓰는 중에도 동작(Carbon `RegisterEventHotKey`, 손쉬운 사용 권한 불필요).
     탭의 단축키 카드에서 조합을 클릭한 뒤 새 키를 눌러 바꾸고, ↺ 로 하나씩 또는 "모두 기본값으로" 되돌릴 수 있음
+- **자동 스크롤** 탭 (YouTube 쇼츠)
+  - 브라우저의 쇼츠 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작
+  - **반복 횟수**: 1이면 한 번 보고 넘기고, N이면 같은 쇼츠를 N번 본 뒤 넘김. 손으로 위로 올려 다시 봐도 상관없이, 그 편이 끝나면 또 넘김
+  - 동작 원리: Apple 이벤트로 브라우저 탭에 작은 스크립트를 주입해 `<video>` 재생 위치를 보고 "다음 동영상" 버튼을 누름
+    (버튼 → 컨테이너 스크롤 → 키 입력 순 폴백). 스크립트는 ATFM이 15초 안에 다시 호출하지 않으면 스스로 멈춤
+  - 지원: Chrome · Brave · Edge · Vivaldi · Arc · Safari (Firefox는 Apple 이벤트 JavaScript가 없어 불가).
+    처음 켤 때 브라우저의 **보기 › 개발자 › Apple 이벤트에서 JavaScript 허용**을 켜야 하고, macOS 자동화 권한을 한 번 허용해야 함
 - **파일 변환 · 다운로드** 탭
   - **링크 다운로드**: YouTube 등 링크를 붙여넣고 화질(최고 · H.264 호환 최고 · 1080p · 720p · MP3만)을 골라 저장.
     Homebrew `yt-dlp` + ffmpeg로 최고 영상·오디오 스트림을 받아 MP4로 합칩니다. 진행률·속도·남은 시간, 중단, 완료 후
@@ -101,6 +108,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_PROBE_AUTOSCROLL=js\|script\|safari` | 쇼츠 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
 | `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
@@ -130,6 +138,7 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
+├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)
 └── Support/     설정 키, 앱 아이콘 캐시
 Sources/MediaRemoteBridge/Bridge.swift   perl이 로드하는 MediaRemote 브리지 (dylib로 따로 빌드)

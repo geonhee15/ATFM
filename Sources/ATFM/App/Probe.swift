@@ -151,6 +151,15 @@ enum Probe {
                 UserDefaults.standard.removeObject(forKey: "downloadDirectory")
             }
         }
+        if let what = ProcessInfo.processInfo.environment["ATFM_PROBE_AUTOSCROLL"] {
+            // "js" prints the page agent call; "script" prints the Chrome AppleScript (for osacompile checks).
+            switch what {
+            case "js": print(ShortsAgent.call(repeat: 2, enabled: true))
+            case "script": print(ShortsBrowser.chrome.script(js: ShortsAgent.call(repeat: 2, enabled: true)))
+            case "safari": print(ShortsBrowser.safari.script(js: ShortsAgent.call(repeat: 1, enabled: true)))
+            default: break
+            }
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_HOTKEY"] == "1" {
             // Key-cap names + a real Carbon registration round-trip for the default combos.
             MainActor.assumeIsolated {

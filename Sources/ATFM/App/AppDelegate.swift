@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let converter = FileConverter()
     private let downloader = MediaDownloader()
     private let screenTools = ScreenTools()
+    private let autoScroller = AutoScroller()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -72,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -95,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         screenTools.hotkeys.focusForRecording = { [weak bubble] in bubble?.panel.makeKey() }
         screenTools.hotkeys.registerAll()
+        autoScroller.start()
         if let record = env["ATFM_DEBUG_HOTKEY_RECORD"], let action = ToolHotkeys.Action(rawValue: record) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 MainActor.assumeIsolated { self.screenTools.hotkeys.beginRecording(action) }
@@ -218,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         converter.cancel()
         downloader.cancel()
         screenTools.hotkeys.unregisterAll()
+        autoScroller.stop()
         nowPlaying.stop()
     }
 

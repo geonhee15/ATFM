@@ -8,6 +8,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case network
     case actions
     case tools
+    case autoscroll
     case convert
     case player
     case ai
@@ -24,6 +25,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .network: return "network"
         case .actions: return "bolt"
         case .tools: return "wand.and.stars"
+        case .autoscroll: return "play.square.stack"
         case .convert: return "arrow.triangle.2.circlepath"
         case .player: return "music.note"
         case .ai: return "bubble.left.and.text.bubble.right"
@@ -40,6 +42,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
         case .tools: return "빠른 툴"
+        case .autoscroll: return "자동 스크롤"
         case .convert: return "파일 변환"
         case .player: return "미니 플레이어"
         case .ai: return "간편 AI"
@@ -61,6 +64,7 @@ struct RootView: View {
     var converter: FileConverter
     var downloader: MediaDownloader
     var screenTools: ScreenTools
+    var autoScroller: AutoScroller
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
     var quit: () -> Void
@@ -96,6 +100,8 @@ struct RootView: View {
                     QuickActionsView(appState: appState, quick: quickActions)
                 case .tools:
                     ScreenToolsView(tools: screenTools)
+                case .autoscroll:
+                    AutoScrollView(scroller: autoScroller)
                 case .convert:
                     ConvertView(converter: converter, downloader: downloader)
                 case .player:
