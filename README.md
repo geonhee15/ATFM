@@ -44,6 +44,11 @@
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
   - 휴지통 비우기(확인 후, Finder 자동화 권한 1회 요청), 모든 외장 디스크 추출
   - 숨겨진 파일 보기 · 데스크탑 아이콘 가리기 (Finder 재시작)
+- **빠른 툴** 탭
+  - **화면 텍스트 복사**: 스크린샷처럼 영역을 드래그하면 그 안의 글자를 Vision OCR(한국어·영어)로 읽어 클립보드에 복사하고,
+    화면 위쪽 가장자리에 1~2초 팝업으로 보여줍니다. 시스템 설정의 **화면 기록** 권한이 필요해요 (허용 후 ATFM 재실행)
+  - **화면 색상 추출**: macOS 스포이드(`NSColorSampler`)로 원하는 지점을 클릭하면 `#RRGGBB` HEX를 팝업으로 띄우고 복사합니다
+  - 최근 결과 목록에서 클릭 한 번으로 다시 복사. 단축키는 다음 업데이트 예정
 - **파일 변환 · 다운로드** 탭
   - **링크 다운로드**: YouTube 등 링크를 붙여넣고 화질(최고 · H.264 호환 최고 · 1080p · 720p · MP3만)을 골라 저장.
     Homebrew `yt-dlp` + ffmpeg로 최고 영상·오디오 스트림을 받아 MP4로 합칩니다. 진행률·속도·남은 시간, 중단, 완료 후
@@ -83,7 +88,8 @@ Xcode 없이 Command Line Tools만 있으면 됩니다 (macOS 14+, Swift 5.9+).
 ./build.sh --run    # 빌드 후 실행
 ```
 
-`build.sh` 는 `swiftc` 로 직접 컴파일한 뒤 `.app` 번들을 조립하고 ad-hoc 서명합니다.
+`build.sh` 는 `swiftc` 로 직접 컴파일한 뒤 `.app` 번들을 조립하고 서명합니다. 키체인에 코드 서명 인증서가 있으면
+(`ATFM_SIGN_IDENTITY`, 기본값 `Omni Dev Signing`) 그걸로 서명해 화면 기록·자동화 권한이 재빌드 후에도 유지되고, 없으면 ad-hoc 서명합니다.
 Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 첫 빌드는 SDK 모듈 캐시(`build/ModuleCache`)를 만드느라 몇 분 걸리고, 그 다음부터는 수 초면 끝납니다.
 
@@ -93,6 +99,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
 | `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
 | `ATFM_SNAPSHOT_MINI=/path.png` | 미니 플레이어 창을 PNG로 저장 |
@@ -120,6 +127,7 @@ Sources/ATFM
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
+├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)
 └── Support/     설정 키, 앱 아이콘 캐시
 Sources/MediaRemoteBridge/Bridge.swift   perl이 로드하는 MediaRemote 브리지 (dylib로 따로 빌드)

@@ -151,6 +151,29 @@ enum Probe {
                 UserDefaults.standard.removeObject(forKey: "downloadDirectory")
             }
         }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_OCR"] == "1" {
+            // Draws Korean + English text into a bitmap and runs the Vision path used by 빠른 툴.
+            let image = NSImage(size: NSSize(width: 760, height: 220), flipped: false) { rect in
+                NSColor.white.setFill()
+                rect.fill()
+                let text = NSAttributedString(string: "안녕하세요, ATFM 빠른 툴 테스트입니다.\nScreen text capture 1234 · 서울시 강남구 테헤란로",
+                                              attributes: [.font: NSFont.systemFont(ofSize: 26, weight: .medium),
+                                                           .foregroundColor: NSColor.black])
+                text.draw(in: rect.insetBy(dx: 30, dy: 50))
+                return true
+            }
+            if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let semaphore = DispatchSemaphore(value: 0)
+                Task.detached {
+                    let text = await ScreenOCR.recognize(cg)
+                    print("ocr probe (\(cg.width)x\(cg.height)):\n\(text)")
+                    semaphore.signal()
+                }
+                _ = semaphore.wait(timeout: .now() + 30)
+            } else {
+                print("ocr probe: could not render the test image")
+            }
+        }
         if let dir = ProcessInfo.processInfo.environment["ATFM_PROBE_CONVERT"] {
             Self.probeConversions(in: URL(fileURLWithPath: dir))
         }

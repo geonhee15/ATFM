@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var gemini: GeminiChat?
     private let converter = FileConverter()
     private let downloader = MediaDownloader()
+    private let screenTools = ScreenTools()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -71,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, checklist: checklist,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -87,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if visible { vm.presentationCount += 1 }
         }
         let env = ProcessInfo.processInfo.environment
+        screenTools.willStartTool = { [weak bubble] in bubble?.hide() }
         vm.onRequestKeyboardReturn = { [weak bubble] in bubble?.returnKeyboardFocus() }
         appState.resizeBubble = { [weak bubble] delta in bubble?.applyResize(delta) }
         appState.resetBubbleSize = { [weak bubble] in bubble?.resetSize() }
@@ -151,6 +153,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MainActor.assumeIsolated { self.bubble?.show() }
             }
         }
+        // Debug helper: ATFM_DEBUG_TOOLS=ocr-bubble|hud-text|hud-color|overlay exercises 빠른 툴 without a mouse;
+        // ATFM_SNAPSHOT_HUD=/path/out.png captures the HUD / overlay window.
+        if let mode = env["ATFM_DEBUG_TOOLS"] {
+            let delay = (Double(env["ATFM_SNAPSHOT_DELAY"] ?? "") ?? 2.0) + 0.5
+            screenTools.hud.snapshotPath = env["ATFM_SNAPSHOT_HUD"]
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                MainActor.assumeIsolated {
+                    switch mode {
+                    case "ocr-bubble":
+                        if let frame = self.bubble?.panel.frame {
+                            self.screenTools.debugRecognize(rect: frame.insetBy(dx: 6, dy: 6))
+                        }
+                    case "hud-text":
+                        self.screenTools.hud.show(.text("안녕하세요, 화면에서 읽은 텍스트예요.\n두 번째 줄도 이렇게 보여요."), duration: 3)
+                    case "hud-color":
+                        self.screenTools.hud.show(.color(NSColor(srgbRed: 0.23, green: 0.48, blue: 0.84, alpha: 1), hex: "#3A7BD5"), duration: 3)
+                    case "overlay":
+                        let screen = NSScreen.main?.frame ?? .zero
+                        let fake = CGRect(x: screen.midX - 220, y: screen.midY - 90, width: 440, height: 180)
+                        self.screenTools.debugOverlay(fakeRect: fake, snapshotTo: env["ATFM_SNAPSHOT_HUD"])
+                    default:
+                        break
+                    }
+                }
+            }
+        }
         // Debug helper: ATFM_SNAPSHOT=/path/out.png writes a PNG of the bubble (own-window capture).
         if let snapshotPath = env["ATFM_SNAPSHOT"] {
             let delay = Double(env["ATFM_SNAPSHOT_DELAY"] ?? "") ?? 2.0
@@ -168,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble?.apply(tint: theme.tint)
         miniPlayer?.apply(appearance: appearance)
         miniPlayer?.apply(tint: theme.tint)
+        screenTools.appearance = appearance
     }
 
     func applicationWillTerminate(_ notification: Notification) {

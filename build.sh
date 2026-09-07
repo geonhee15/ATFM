@@ -67,7 +67,14 @@ cp build/ATFMMediaRemote.dylib "$APP/Contents/Resources/ATFMMediaRemote.dylib"
 cp Resources/mediaremote.pl "$APP/Contents/Resources/mediaremote.pl"
 
 xattr -cr "$APP"
-codesign --force --sign - "$APP"
+# A stable signing identity keeps TCC grants (Screen Recording, Automation) across rebuilds;
+# ad-hoc signatures change every build and macOS forgets the permission.
+SIGN_IDENTITY="${ATFM_SIGN_IDENTITY:-Omni Dev Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_IDENTITY\""; then
+  codesign --force --sign "$SIGN_IDENTITY" "$APP"
+else
+  codesign --force --sign - "$APP"
+fi
 echo "✔ built $APP"
 
 if [[ $RUN -eq 1 ]]; then
