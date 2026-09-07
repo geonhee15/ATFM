@@ -85,10 +85,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bubble.onVisibilityChanged = { [weak self] visible in
             self?.statusItem?.button?.highlight(visible)
             self?.appState.setBubbleVisible(visible)
-            if visible { vm.presentationCount += 1 }
+            if visible { vm.presentationCount += 1 } else { self?.screenTools.hotkeys.cancelRecording() }
         }
         let env = ProcessInfo.processInfo.environment
         screenTools.willStartTool = { [weak bubble] in bubble?.hide() }
+        screenTools.hotkeys.handlers = [
+            .captureText: { [weak self] in self?.screenTools.captureText() },
+            .pickColor: { [weak self] in self?.screenTools.pickColor() },
+        ]
+        screenTools.hotkeys.focusForRecording = { [weak bubble] in bubble?.panel.makeKey() }
+        screenTools.hotkeys.registerAll()
+        if let record = env["ATFM_DEBUG_HOTKEY_RECORD"], let action = ToolHotkeys.Action(rawValue: record) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                MainActor.assumeIsolated { self.screenTools.hotkeys.beginRecording(action) }
+            }
+        }
         vm.onRequestKeyboardReturn = { [weak bubble] in bubble?.returnKeyboardFocus() }
         appState.resizeBubble = { [weak bubble] delta in bubble?.applyResize(delta) }
         appState.resetBubbleSize = { [weak bubble] in bubble?.resetSize() }
@@ -206,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keepAwake.setActive(false)
         converter.cancel()
         downloader.cancel()
+        screenTools.hotkeys.unregisterAll()
         nowPlaying.stop()
     }
 

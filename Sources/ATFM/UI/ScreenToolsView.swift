@@ -11,6 +11,7 @@ struct ScreenToolsView: View {
                 if !tools.hasScreenAccess { permissionCard }
                 textRow
                 colorRow
+                hotkeyCard
                 statusRow
                 if !tools.records.isEmpty { recentCard }
             }
@@ -18,6 +19,42 @@ struct ScreenToolsView: View {
         }
         .padding(.horizontal, 20)
         .onAppear { tools.refreshAccess() }
+        .onDisappear { tools.hotkeys.cancelRecording() }
+    }
+
+    private var hotkeys: ToolHotkeys { tools.hotkeys }
+
+    private var hotkeyCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("단축키")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !hotkeys.allDefault {
+                    Button("모두 기본값으로") { hotkeys.resetAll() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+            ForEach(ToolHotkeys.Action.allCases) { action in
+                HotkeyRow(action: action, hotkeys: hotkeys)
+                if action != ToolHotkeys.Action.allCases.last {
+                    Divider().padding(.leading, 14)
+                }
+            }
+            Text(hotkeys.message ?? "조합을 클릭한 뒤 새 키를 누르세요 · Esc 취소 · 다른 앱을 쓰는 중에도 동작해요")
+                .font(.system(size: 10))
+                .foregroundStyle(hotkeys.message == nil ? Color.secondary.opacity(0.8) : Color.red)
+                .padding(.horizontal, 14)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
+        }
+        .card()
     }
 
     private var header: some View {
@@ -192,5 +229,55 @@ private struct RecordRow: View {
         .onTapGesture(perform: copy)
         .onHover { hovering = $0 }
         .help("클릭하면 다시 복사")
+    }
+}
+
+private struct HotkeyRow: View {
+    let action: ToolHotkeys.Action
+    let hotkeys: ToolHotkeys
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var recording: Bool { hotkeys.recording == action }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(action.title)
+                .font(.system(size: 12, weight: .medium))
+            Spacer(minLength: 8)
+            if !hotkeys.isDefault(action) && !recording {
+                Button {
+                    hotkeys.reset(action)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("기본값 \(action.defaultCombo.display)로 되돌리기")
+            }
+            Button {
+                if recording { hotkeys.cancelRecording() } else { hotkeys.beginRecording(action) }
+            } label: {
+                Text(recording ? "키를 누르세요…" : hotkeys.combo(for: action).display)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(recording ? Theme.accent : Color.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .frame(minWidth: 64)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(recording ? Theme.accent.opacity(0.14) : Theme.chipFill(scheme))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(recording ? Theme.accent.opacity(0.7) : Color.clear, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(recording ? "Esc로 취소" : "클릭해서 바꾸기")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }

@@ -151,6 +151,26 @@ enum Probe {
                 UserDefaults.standard.removeObject(forKey: "downloadDirectory")
             }
         }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_HOTKEY"] == "1" {
+            // Key-cap names + a real Carbon registration round-trip for the default combos.
+            MainActor.assumeIsolated {
+                for action in ToolHotkeys.Action.allCases {
+                    let combo = action.defaultCombo
+                    let result = HotkeyCenter.shared.register(combo) {}
+                    switch result {
+                    case .success(let id):
+                        print("hotkey probe: \(action.rawValue) = \(combo.display) registered (id \(id))")
+                        HotkeyCenter.shared.unregister(id)
+                    case .failure(let error):
+                        print("hotkey probe: \(action.rawValue) = \(combo.display) FAILED \(error.message)")
+                    }
+                }
+                let samples: [UInt16] = [0, 12, 18, 29, 49, 122, 126, 44, 27, 24]
+                print("hotkey probe: key names " + samples.map { "\($0)=\(KeyCombo.keyName(for: $0))" }.joined(separator: " "))
+                let shiftOnly = KeyCombo(keyCode: 0, flags: [.shift])
+                print("hotkey probe: shift-only usable = \(shiftOnly.isUsable), F1 usable = \(KeyCombo(keyCode: 122, flags: []).isUsable)")
+            }
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_OCR"] == "1" {
             // Draws Korean + English text into a bitmap and runs the Vision path used by 빠른 툴.
             let image = NSImage(size: NSSize(width: 760, height: 220), flipped: false) { rect in

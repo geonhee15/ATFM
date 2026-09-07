@@ -34,6 +34,7 @@ final class ScreenTools {
         didSet { hud.appearance = appearance }
     }
     @ObservationIgnored let hud = ToolHUD()
+    let hotkeys = ToolHotkeys()
     @ObservationIgnored private var selector: RegionSelector?
     @ObservationIgnored private var busy = false
 
