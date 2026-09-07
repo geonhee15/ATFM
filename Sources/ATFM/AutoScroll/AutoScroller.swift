@@ -244,6 +244,10 @@ final class AutoScroller {
         }
         input.fileHandleForWriting.write(Data(script.utf8))
         try? input.fileHandleForWriting.close()
+        // The completion touches @Observable state, so it must land on the main thread.
+        let finish: (String, String?) -> Void = { out, err in
+            if Thread.isMainThread { completion(out, err) } else { DispatchQueue.main.async { completion(out, err) } }
+        }
         let work = {
             let outData = output.fileHandleForReading.readDataToEndOfFile()
             let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
@@ -251,7 +255,7 @@ final class AutoScroller {
             let out = String(decoding: outData, as: UTF8.self)
             let err = String(decoding: errData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             let failed = process.terminationStatus != 0 || !err.isEmpty
-            completion(out, failed ? (err.isEmpty ? "osascript 종료 코드 \(process.terminationStatus)" : err) : nil)
+            finish(out, failed ? (err.isEmpty ? "osascript 종료 코드 \(process.terminationStatus)" : err) : nil)
         }
         if synchronous {
             DispatchQueue.global().asyncAfter(deadline: .now() + 3) { if process.isRunning { process.terminate() } }
