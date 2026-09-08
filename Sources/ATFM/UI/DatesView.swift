@@ -341,10 +341,9 @@ private struct DDayRow: View {
     @State private var hovering = false
     @Environment(\.colorScheme) private var scheme
 
+    /// 처음부터 D+ → blue, 기념일까지 D- / D-Day → red (the user's convention).
     private var labelColor: Color {
-        if info.isToday { return .red }
-        if info.isPast { return .secondary }
-        return info.entry.color
+        info.isElapsed ? Color(red: 0.25, green: 0.50, blue: 0.95) : Color(red: 0.92, green: 0.27, blue: 0.30)
     }
 
     var body: some View {
@@ -439,6 +438,21 @@ private struct EntryEditor: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            if entry.showsInDday {
+                Picker("크게 표시", selection: Binding(get: { entry.style }, set: { entry.ddayStyle = $0 })) {
+                    ForEach(DateEntry.DDayStyle.allCases) { style in Text(style.title).tag(style) }
+                }
+                .pickerStyle(.segmented)
+                HStack(spacing: 6) {
+                    Circle().fill(Color(red: 0.92, green: 0.27, blue: 0.30)).frame(width: 8, height: 8)
+                    Text("기념일까지는 빨강").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    Circle().fill(Color(red: 0.25, green: 0.50, blue: 0.95)).frame(width: 8, height: 8)
+                    Text("처음부터는 파랑").font(.system(size: 10)).foregroundStyle(.tertiary)
+                }
+                if entry.style == .elapsed {
+                    Toggle("시작일을 1일로 세기 (D+1부터)", isOn: Binding(get: { entry.startsAtOne }, set: { entry.countsStartAsOne = $0 }))
+                }
+            }
             HStack {
                 if !isNew {
                     Button("삭제", role: .destructive) { finish(.delete(entry.id)) }

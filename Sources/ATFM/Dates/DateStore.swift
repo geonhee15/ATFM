@@ -29,6 +29,24 @@ struct DateEntry: Identifiable, Codable, Equatable {
     var showsInDday: Bool = false
     var repeatRule: Repeat = .none
     var createdAt: Date = Date()
+    /// Which number the D-day row shows big (nil = countdown). Optional so old files still decode.
+    var ddayStyle: DDayStyle? = nil
+    /// "처음부터 D+": count the start day itself as day 1 (couple-app style).
+    var countsStartAsOne: Bool? = nil
+
+    enum DDayStyle: String, Codable, CaseIterable, Identifiable {
+        case countdown, elapsed
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .countdown: return "기념일까지 D-"
+            case .elapsed: return "처음부터 D+"
+            }
+        }
+    }
+
+    var style: DDayStyle { ddayStyle ?? .countdown }
+    var startsAtOne: Bool { countsStartAsOne ?? false }
 
     static let palette: [Color] = [
         Color(red: 0.36, green: 0.55, blue: 0.95),   // blue
@@ -70,11 +88,11 @@ struct DateEntry: Identifiable, Codable, Equatable {
 struct DDayInfo: Identifiable {
     let entry: DateEntry
     let label: String        // "D-12", "D-Day", "D+120"
-    let daysUntil: Int       // negative = past (non-repeating)
+    let daysUntil: Int       // days to the next occurrence; negative = past (non-repeating)
+    let isElapsed: Bool      // big number counts up from the start (blue) instead of down (red)
     let secondary: String
     var id: UUID { entry.id }
-    var isToday: Bool { daysUntil == 0 }
-    var isPast: Bool { daysUntil < 0 }
+    var isToday: Bool { daysUntil == 0 && !isElapsed }
 }
 
 @MainActor
@@ -148,10 +166,22 @@ final class DateStore {
         let infos = entries.filter(\.showsInDday).map { entry -> DDayInfo in
             let target = Self.nextOccurrence(of: entry, from: start, calendar: calendar)
             let days = calendar.dateComponents([.day], from: start, to: target).day ?? 0
+            let sinceStart = (calendar.dateComponents([.day], from: entry.date, to: start).day ?? 0) + (entry.startsAtOne ? 1 : 0)
             let label: String
-            if days == 0 { label = "D-Day" } else if days > 0 { label = "D-\(days)" } else { label = "D+\(-days)" }
-            return DDayInfo(entry: entry, label: label, daysUntil: days,
-                            secondary: Self.secondaryText(for: entry, target: target, today: start, calendar: calendar))
+            let elapsed: Bool
+            if entry.style == .elapsed, sinceStart >= (entry.startsAtOne ? 1 : 0) {
+                label = "D+\(sinceStart)"
+                elapsed = true
+            } else if days == 0 {
+                label = "D-Day"; elapsed = false
+            } else if days > 0 {
+                label = "D-\(days)"; elapsed = false
+            } else {
+                label = "D+\(-days)"; elapsed = true          // non-repeating date that already passed
+            }
+            return DDayInfo(entry: entry, label: label, daysUntil: days, isElapsed: elapsed,
+                            secondary: Self.secondaryText(for: entry, target: target, today: start, daysUntil: days,
+                                                          sinceStart: sinceStart, calendar: calendar))
         }
         // Upcoming (D-Day first, then soonest) before past D+ items (most recent first).
         return infos.sorted {
@@ -188,22 +218,29 @@ final class DateStore {
         }
     }
 
-    private static func secondaryText(for entry: DateEntry, target: Date, today: Date, calendar: Calendar) -> String {
+    private static func secondaryText(for entry: DateEntry, target: Date, today: Date, daysUntil: Int,
+                                      sinceStart: Int, calendar: Calendar) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "yyyy년 M월 d일 (E)"
+        let countdown = daysUntil == 0 ? "오늘" : daysUntil > 0 ? "D-\(daysUntil)" : "D+\(-daysUntil)"
+        let elapsed = entry.style == .elapsed
         switch entry.repeatRule {
         case .none:
-            f.dateFormat = "yyyy년 M월 d일 (E)"
-            return f.string(from: entry.date) + (entry.timeText.map { " \($0)" } ?? "")
+            var parts = [f.string(from: entry.date) + (entry.timeText.map { " \($0)" } ?? "")]
+            if elapsed, daysUntil > 0 { parts.append("아직 \(countdown)") }
+            if !elapsed, daysUntil < 0 { parts.append("처음부터 D+\(sinceStart)") }
+            return parts.joined(separator: " · ")
         case .yearly:
             let years = calendar.component(.year, from: target) - entry.year
-            let sinceStart = calendar.dateComponents([.day], from: entry.date, to: today).day ?? 0
             var parts = ["매년 \(entry.month)월 \(entry.day)일"]
             if years > 0 { parts.append("\(years)주년") }
-            if sinceStart > 0 { parts.append("처음부터 D+\(sinceStart)") }
+            if elapsed { parts.insert("다음 기념일 \(countdown)", at: 0) } else if sinceStart > 0 { parts.append("처음부터 D+\(sinceStart)") }
             return parts.joined(separator: " · ")
         case .monthly:
-            return "매월 \(entry.day)일"
+            var parts = ["매월 \(entry.day)일"]
+            if elapsed { parts.insert("다음 \(countdown)", at: 0) } else if sinceStart > 0 { parts.append("처음부터 D+\(sinceStart)") }
+            return parts.joined(separator: " · ")
         }
     }
 
