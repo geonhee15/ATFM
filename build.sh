@@ -75,13 +75,23 @@ xattr -cr "$APP" 2>/dev/null || true
 # ad-hoc signatures change every build and macOS forgets the permission.
 SIGN_IDENTITY="${ATFM_SIGN_IDENTITY:-Omni Dev Signing}"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_IDENTITY\""; then
-  codesign --force --sign "$SIGN_IDENTITY" "$APP"
+  SIGN_WITH="$SIGN_IDENTITY"
 else
-  codesign --force --sign - "$APP"
+  SIGN_WITH="-"
 fi
-if ! codesign --verify --strict "$APP" 2>/dev/null; then
+# Finder re-stamps FinderInfo within a second or two, so strip + sign in one breath and retry if it lost the race.
+signed=0
+for attempt in 1 2 3; do
+  xattr -c "$APP" 2>/dev/null || true
+  xattr -cr "$APP" 2>/dev/null || true
+  if codesign --force --sign "$SIGN_WITH" "$APP" 2>/dev/null; then signed=1; break; fi
+  sleep 0.3
+done
+# Non-strict verify: this is what TCC checks. (--strict would flag the FinderInfo xattr Finder adds
+# back later, which does not invalidate the sealed signature.)
+if [[ $signed -ne 1 ]] || ! codesign --verify "$APP" 2>/dev/null || codesign -dvv "$APP" 2>&1 | grep -q "Sealed Resources=none"; then
   echo "✖ codesign did not produce a valid sealed signature:"
-  codesign --verify --strict --verbose=2 "$APP" 2>&1 | sed 's/^/   /'
+  codesign --verify --verbose=2 "$APP" 2>&1 | sed 's/^/   /'
   exit 1
 fi
 echo "✔ built $APP"
@@ -94,10 +104,10 @@ if [[ "$CONFIG" != "debug" ]]; then
   mkdir -p "$(dirname "$INSTALL_APP")"
   rm -rf "$INSTALL_APP"
   ditto --noextattr --noqtn "$APP" "$INSTALL_APP"
-  if codesign --verify --strict "$INSTALL_APP" 2>/dev/null; then
+  if codesign --verify "$INSTALL_APP" 2>/dev/null; then
     echo "✔ installed $INSTALL_APP"
   else
-    echo "✖ installed copy failed signature check"; exit 1
+    echo "✖ installed copy failed signature check"; codesign --verify --verbose=2 "$INSTALL_APP" 2>&1 | sed 's/^/   /'; exit 1
   fi
 fi
 
