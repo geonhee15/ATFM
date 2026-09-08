@@ -341,18 +341,26 @@ private struct DayCell: View {
                 .foregroundStyle(numberColor)
                 .frame(width: 20, height: 20)
                 .background(Circle().fill(isToday ? Theme.accent : Color.clear))
+            let singles = events.filter { !$0.isMultiDay }
+            let spans = events.filter(\.isMultiDay)
             HStack(spacing: 2) {
-                ForEach(events.prefix(3)) { event in
+                ForEach(singles.prefix(3)) { event in
                     Circle().fill(event.color).frame(width: 4, height: 4)
                 }
-                if events.count > 3 {
+                if singles.count > 3 {
                     Text("+").font(.system(size: 7)).foregroundStyle(.secondary)
                 }
             }
             .frame(height: 5)
+            VStack(spacing: 1) {
+                ForEach(spans.prefix(2)) { event in
+                    SpanBar(color: event.color, isStart: event.isSpanStart(day), isEnd: event.isSpanEnd(day))
+                }
+            }
+            .frame(height: spans.isEmpty ? 0 : 5)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 34)
+        .frame(height: 40)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(isSelected ? Theme.accent.opacity(0.14) : Color.clear)
@@ -361,6 +369,22 @@ private struct DayCell: View {
         .onTapGesture(count: 2, perform: add)
         .onTapGesture(perform: select)
         .opacity(inMonth ? 1 : 0.7)
+    }
+}
+
+/// A slice of a multi-day event: rounded on the first/last day so the run reads as one bar.
+private struct SpanBar: View {
+    let color: Color
+    let isStart: Bool
+    let isEnd: Bool
+
+    var body: some View {
+        UnevenRoundedRectangle(topLeadingRadius: isStart ? 2 : 0, bottomLeadingRadius: isStart ? 2 : 0,
+                               bottomTrailingRadius: isEnd ? 2 : 0, topTrailingRadius: isEnd ? 2 : 0)
+            .fill(color.opacity(0.85))
+            .frame(height: 2)
+            .padding(.leading, isStart ? 3 : -1)
+            .padding(.trailing, isEnd ? 3 : -1)
     }
 }
 
@@ -377,7 +401,9 @@ private struct EventRow: View {
                 Text(entry.title.isEmpty ? "(제목 없음)" : entry.title)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
-                if !entry.note.isEmpty {
+                if entry.isMultiDay {
+                    Text(entry.rangeText).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                } else if !entry.note.isEmpty {
                     Text(entry.note).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
@@ -455,6 +481,8 @@ private struct EntryEditor: View {
 
     @State private var date: Date
     @State private var time: Date
+    @State private var endDate: Date
+    @State private var hasEnd: Bool
     @FocusState private var titleFocused: Bool
 
     init(entry: DateEntry, isNew: Bool, finish: @escaping (Result) -> Void) {
@@ -462,6 +490,8 @@ private struct EntryEditor: View {
         self.isNew = isNew
         self.finish = finish
         _date = State(initialValue: entry.date)
+        _endDate = State(initialValue: entry.isMultiDay ? entry.endDate : (Calendar.current.date(byAdding: .day, value: 1, to: entry.date) ?? entry.date))
+        _hasEnd = State(initialValue: entry.isMultiDay)
         var t = DateComponents(); t.hour = entry.hour ?? 9; t.minute = entry.minute ?? 0
         _time = State(initialValue: Calendar.current.date(from: t) ?? Date())
     }
@@ -473,8 +503,16 @@ private struct EntryEditor: View {
             TextField("제목", text: $entry.title)
                 .textFieldStyle(.roundedBorder)
                 .focused($titleFocused)
-            DatePicker("날짜", selection: $date, displayedComponents: .date)
+            DatePicker(hasEnd ? "시작" : "날짜", selection: $date, displayedComponents: .date)
                 .datePickerStyle(.compact)
+            Toggle("기간 (며칠부터 며칠까지)", isOn: $hasEnd)
+            if hasEnd {
+                DatePicker("종료", selection: $endDate, in: date..., displayedComponents: .date)
+                    .datePickerStyle(.compact)
+                Text("\(spanDaysPreview)일간")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
             Toggle("시간", isOn: Binding(get: { entry.hasTime }, set: { on in
                 if on { entry.hour = Calendar.current.component(.hour, from: time); entry.minute = Calendar.current.component(.minute, from: time) }
                 else { entry.hour = nil; entry.minute = nil }
@@ -537,6 +575,11 @@ private struct EntryEditor: View {
         .onAppear { titleFocused = true }
     }
 
+    private var spanDaysPreview: Int {
+        let a = Calendar.current.startOfDay(for: date), b = Calendar.current.startOfDay(for: endDate)
+        return max(1, (Calendar.current.dateComponents([.day], from: a, to: b).day ?? 0) + 1)
+    }
+
     private var repeatHint: String {
         switch entry.repeatRule {
         case .none: return "지나면 D+N 으로 세어요."
@@ -554,6 +597,7 @@ private struct EntryEditor: View {
             entry.hour = Calendar.current.component(.hour, from: time)
             entry.minute = Calendar.current.component(.minute, from: time)
         }
+        entry.setEnd(hasEnd ? endDate : nil)
         if entry.title.trimmingCharacters(in: .whitespaces).isEmpty { entry.title = entry.showsInDday ? "기념일" : "일정" }
         finish(.save(entry))
     }

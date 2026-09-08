@@ -36,7 +36,7 @@ def ev(title,d,**kw):
 json.dump([
  ev("팀 회의", today+datetime.timedelta(days=2), hour=15, minute=0),
  ev("치과 예약", today+datetime.timedelta(days=5), hour=10, minute=30, colorIndex=2),
- ev("제주 여행", today+datetime.timedelta(days=12), colorIndex=3, showsInDday=True),
+ ev("제주 여행", today+datetime.timedelta(days=12), colorIndex=3, showsInDday=True, endYear=(today+datetime.timedelta(days=16)).year, endMonth=(today+datetime.timedelta(days=16)).month, endDay=(today+datetime.timedelta(days=16)).day),
  ev("헬스장 등록", today, hour=19, minute=0, colorIndex=1),
  ev("사귄 날", datetime.date(2024,3,14), colorIndex=5, showsInCalendar=False, showsInDday=True, repeatRule="yearly", ddayStyle="elapsed", countsStartAsOne=True),
  ev("월급날", datetime.date(2026,1,25), colorIndex=3, showsInCalendar=False, showsInDday=True, repeatRule="monthly"),

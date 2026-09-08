@@ -29,6 +29,10 @@ struct DateEntry: Identifiable, Codable, Equatable {
     var showsInDday: Bool = false
     var repeatRule: Repeat = .none
     var createdAt: Date = Date()
+    /// Optional end of a multi-day span (inclusive). nil = single day. Optional so old files still decode.
+    var endYear: Int? = nil
+    var endMonth: Int? = nil
+    var endDay: Int? = nil
     /// Which number the D-day row shows big (nil = countdown). Optional so old files still decode.
     var ddayStyle: DDayStyle? = nil
     /// "처음부터 D+": count the start day itself as day 1 (couple-app style).
@@ -68,6 +72,30 @@ struct DateEntry: Identifiable, Codable, Equatable {
 
     var hasTime: Bool { hour != nil }
 
+    /// Inclusive end date; equals `date` for single-day entries.
+    var endDate: Date {
+        guard let endYear, let endMonth, let endDay,
+              let end = Calendar.current.date(from: DateComponents(year: endYear, month: endMonth, day: endDay)),
+              end > date else { return date }
+        return end
+    }
+
+    var isMultiDay: Bool { endDate > date }
+
+    /// Number of days in the span (1 for a single day).
+    var spanDays: Int { (Calendar.current.dateComponents([.day], from: date, to: endDate).day ?? 0) + 1 }
+
+    mutating func setEnd(_ end: Date?) {
+        guard let end, Calendar.current.startOfDay(for: end) > date else { endYear = nil; endMonth = nil; endDay = nil; return }
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: end)
+        endYear = c.year; endMonth = c.month; endDay = c.day
+    }
+
+    var rangeText: String {
+        let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR"); f.dateFormat = "M/d"
+        return "\(f.string(from: date))–\(f.string(from: endDate)) · \(spanDays)일간"
+    }
+
     var timeText: String? {
         guard let hour, let minute else { return nil }
         return String(format: "%02d:%02d", hour, minute)
@@ -75,12 +103,45 @@ struct DateEntry: Identifiable, Codable, Equatable {
 
     /// Does this entry land on `day` (a start-of-day Date), honoring repeats?
     func occurs(on target: Date, calendar: Calendar = .current) -> Bool {
-        let c = calendar.dateComponents([.year, .month, .day], from: target)
-        switch repeatRule {
-        case .none: return c.year == year && c.month == month && c.day == day
-        case .monthly: return c.day == day && target >= date
-        case .yearly: return c.month == month && c.day == day && target >= date
+        occurrenceStart(containing: target, calendar: calendar) != nil
+    }
+
+    /// Start date of the occurrence (single day or span) that contains `target`, if any.
+    func occurrenceStart(containing target: Date, calendar: Calendar = .current) -> Date? {
+        let span = spanDays - 1
+        func contains(_ start: Date) -> Bool {
+            guard start >= date, let end = calendar.date(byAdding: .day, value: span, to: start) else { return false }
+            return target >= start && target <= end
         }
+        switch repeatRule {
+        case .none:
+            return contains(date) ? date : nil
+        case .yearly:
+            let y = calendar.component(.year, from: target)
+            for candidateYear in [y, y - 1] {
+                if let start = calendar.date(from: DateComponents(year: candidateYear, month: month, day: day)), contains(start) { return start }
+            }
+            return nil
+        case .monthly:
+            let comps = calendar.dateComponents([.year, .month], from: target)
+            for offset in [0, -1] {
+                if let base = calendar.date(from: comps), let monthStart = calendar.date(byAdding: .month, value: offset, to: base),
+                   let start = calendar.date(from: DateComponents(year: calendar.component(.year, from: monthStart),
+                                                                 month: calendar.component(.month, from: monthStart), day: day)),
+                   contains(start) { return start }
+            }
+            return nil
+        }
+    }
+
+    func isSpanStart(_ target: Date, calendar: Calendar = .current) -> Bool {
+        occurrenceStart(containing: target, calendar: calendar) == calendar.startOfDay(for: target)
+    }
+
+    func isSpanEnd(_ target: Date, calendar: Calendar = .current) -> Bool {
+        guard let start = occurrenceStart(containing: target, calendar: calendar),
+              let end = calendar.date(byAdding: .day, value: spanDays - 1, to: start) else { return false }
+        return end == calendar.startOfDay(for: target)
     }
 }
 
@@ -169,7 +230,12 @@ final class DateStore {
             let sinceStart = (calendar.dateComponents([.day], from: entry.date, to: start).day ?? 0) + (entry.startsAtOne ? 1 : 0)
             let label: String
             let elapsed: Bool
-            if entry.style == .elapsed, sinceStart >= (entry.startsAtOne ? 1 : 0) {
+            let ongoingStart = entry.isMultiDay ? entry.occurrenceStart(containing: start, calendar: calendar) : nil
+            if let ongoingStart, entry.style != .elapsed {
+                let dayIndex = (calendar.dateComponents([.day], from: ongoingStart, to: start).day ?? 0) + 1
+                label = dayIndex == 1 ? "D-Day" : "\(dayIndex)일째"
+                elapsed = dayIndex != 1
+            } else if entry.style == .elapsed, sinceStart >= (entry.startsAtOne ? 1 : 0) {
                 label = "D+\(sinceStart)"
                 elapsed = true
             } else if days == 0 {
@@ -225,9 +291,14 @@ final class DateStore {
         f.dateFormat = "yyyy년 M월 d일 (E)"
         let countdown = daysUntil == 0 ? "오늘" : daysUntil > 0 ? "D-\(daysUntil)" : "D+\(-daysUntil)"
         let elapsed = entry.style == .elapsed
+        if entry.isMultiDay, let ongoing = entry.occurrenceStart(containing: today, calendar: calendar),
+           let end = calendar.date(byAdding: .day, value: entry.spanDays - 1, to: ongoing) {
+            let left = calendar.dateComponents([.day], from: today, to: end).day ?? 0
+            return "\(entry.rangeText) · " + (left == 0 ? "오늘 마지막 날" : "끝까지 D-\(left)")
+        }
         switch entry.repeatRule {
         case .none:
-            var parts = [f.string(from: entry.date) + (entry.timeText.map { " \($0)" } ?? "")]
+            var parts = [entry.isMultiDay ? entry.rangeText : f.string(from: entry.date) + (entry.timeText.map { " \($0)" } ?? "")]
             if elapsed, daysUntil > 0 { parts.append("아직 \(countdown)") }
             if !elapsed, daysUntil < 0 { parts.append("처음부터 D+\(sinceStart)") }
             return parts.joined(separator: " · ")
