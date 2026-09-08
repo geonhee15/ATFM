@@ -12,8 +12,13 @@ final class ClipboardStore: @unchecked Sendable {
     private let lock = NSLock()
 
     init() {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        directory = base.appendingPathComponent("ATFM", isDirectory: true)
+        // ATFM_DEBUG_DATA_DIR points every store at a scratch folder (screenshots with sample data).
+        if let override = ProcessInfo.processInfo.environment["ATFM_DEBUG_DATA_DIR"], !override.isEmpty {
+            directory = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            directory = base.appendingPathComponent("ATFM", isDirectory: true)
+        }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         databaseURL = directory.appendingPathComponent("clipboard.sqlite")
         open()

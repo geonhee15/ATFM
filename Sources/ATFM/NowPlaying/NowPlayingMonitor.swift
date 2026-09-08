@@ -57,7 +57,11 @@ final class NowPlayingMonitor {
     func start() {
         guard process == nil else { return }
         stopping = false
-        launchBridge()
+        if ProcessInfo.processInfo.environment["ATFM_DEBUG_NOWPLAYING_SAMPLE"] == "1" {
+            injectSample()      // screenshots: a made-up track instead of whatever is really playing
+        } else {
+            launchBridge()
+        }
         let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.now = Date() }
         }
@@ -167,6 +171,30 @@ final class NowPlayingMonitor {
                   let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
             handle(object)
         }
+    }
+
+    /// Fake track + generated artwork for README screenshots (ATFM_DEBUG_NOWPLAYING_SAMPLE=1).
+    private func injectSample() {
+        let spotify = NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").first
+        track = NowPlayingTrack(title: "Midnight Drive", artist: "Neon Skyline", album: "City Lights",
+                                duration: 214, elapsed: 73, rate: 1, timestamp: Date(), isPlaying: true,
+                                pid: spotify?.processIdentifier ?? 0,
+                                sourceBundleID: spotify?.bundleIdentifier ?? "com.spotify.client",
+                                sourceName: spotify?.localizedName ?? "Spotify", hasArtwork: true)
+        let size = NSSize(width: 300, height: 300)
+        artwork = NSImage(size: size, flipped: false) { rect in
+            let gradient = NSGradient(colors: [NSColor(srgbRed: 0.16, green: 0.20, blue: 0.55, alpha: 1),
+                                               NSColor(srgbRed: 0.85, green: 0.35, blue: 0.55, alpha: 1),
+                                               NSColor(srgbRed: 0.98, green: 0.70, blue: 0.35, alpha: 1)])
+            gradient?.draw(in: rect, angle: 60)
+            NSColor.white.withAlphaComponent(0.85).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 190, y: 40, width: 70, height: 70)).fill()
+            NSColor.white.withAlphaComponent(0.25).setFill()
+            NSBezierPath(rect: NSRect(x: 0, y: 0, width: rect.width, height: 90)).fill()
+            return true
+        }
+        isBridgeRunning = true
+        now = Date()
     }
 
     private func handle(_ object: [String: Any]) {

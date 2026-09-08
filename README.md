@@ -1,7 +1,40 @@
 # ATFM — Additional Things For Mac
 
 맥을 쓰면서 "이거 하나 더 있었으면…" 싶었던 기능들을 메뉴 막대 앱 하나에 모아가는 프로젝트입니다.
-지금은 첫 번째 기능인 **클립보드 기록**이 들어 있습니다.
+클립보드 기록으로 시작해서 체크리스트 · 미니 메모 · 시스템/네트워크 모니터 · 빠른 동작 · 빠른 툴(화면 OCR·스포이드) ·
+쇼츠 자동 스크롤 · 파일 변환/다운로드 · 미니 플레이어 · 간편 AI까지, 탭 하나씩 늘려가고 있습니다.
+
+## 스크린샷
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/clipboard.png" width="230"><br><b>클립보드</b><br><sub>앱별 · 시:분:초 · 검색</sub></td>
+    <td align="center"><img src="docs/screenshots/checklist.png" width="230"><br><b>체크리스트</b><br><sub>마감 배지 · 보관함</sub></td>
+    <td align="center"><img src="docs/screenshots/notes.png" width="230"><br><b>미니 메모</b><br><sub>자동 저장 스크래치</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/system.png" width="230"><br><b>시스템</b><br><sub>온도 · CPU/GPU · 배터리</sub></td>
+    <td align="center"><img src="docs/screenshots/network.png" width="230"><br><b>네트워크</b><br><sub>실시간 속도 · 앱별 사용량</sub></td>
+    <td align="center"><img src="docs/screenshots/actions.png" width="230"><br><b>빠른 동작</b><br><sub>다크 모드 · 백라이트 · 잠금</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/tools.png" width="230"><br><b>빠른 툴</b><br><sub>화면 텍스트 복사 · 스포이드 · 단축키</sub></td>
+    <td align="center"><img src="docs/screenshots/autoscroll.png" width="230"><br><b>자동 스크롤</b><br><sub>YouTube 쇼츠 자동 넘기기</sub></td>
+    <td align="center"><img src="docs/screenshots/convert.png" width="230"><br><b>파일 변환 · 다운로드</b><br><sub>yt-dlp · ffmpeg</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/player.png" width="230"><br><b>미니 플레이어</b><br><sub>Now Playing 제어</sub></td>
+    <td align="center"><img src="docs/screenshots/ai.png" width="230"><br><b>간편 AI</b><br><sub>Gemini · 웹 검색 출처</sub></td>
+    <td align="center"><img src="docs/screenshots/awake.png" width="230"><br><b>절전 방지</b><br><sub>지속 시간 · 덮개 닫아도 유지</sub></td>
+  </tr>
+</table>
+
+<p>
+  <img src="docs/screenshots/miniplayer.png" width="300" alt="미니 플레이어 플로팅 패널">&nbsp;&nbsp;
+  <img src="docs/screenshots/hud-text.png" width="260" alt="화면 텍스트 복사 HUD">&nbsp;&nbsp;
+  <img src="docs/screenshots/hud-color.png" width="140" alt="색상 추출 HUD">
+</p>
+<sub>플로팅 미니 플레이어 · 빠른 툴의 상단 팝업(텍스트 복사 / 색상 추출) · 설정 탭은 <a href="docs/screenshots/settings.png">여기</a></sub>
 
 ## 지금 되는 것
 
@@ -110,6 +143,8 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
+| `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari` | 쇼츠 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
