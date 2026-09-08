@@ -151,6 +151,19 @@ enum Probe {
                 UserDefaults.standard.removeObject(forKey: "downloadDirectory")
             }
         }
+        if let word = ProcessInfo.processInfo.environment["ATFM_PROBE_DICT"] {
+            let dictionary = SystemDictionary.shared
+            for kind in SystemDictionary.Kind.allCases {
+                print("dict probe: \(kind.rawValue) available=\(dictionary.isAvailable(kind)) installed=\(dictionary.isInstalled(kind))")
+            }
+            for kind in [SystemDictionary.Kind.koreanEnglish, .korean] {
+                let entries = dictionary.entries(for: word, in: kind)
+                print("dict probe: [\(kind.title)] '\(word)' → \(entries.count) entries")
+                for entry in entries.prefix(3) { print("   • \(entry.headword): \(SystemDictionary.prettify(entry.text).prefix(160).replacingOccurrences(of: "\n", with: " ⏎ "))") }
+                if entries.isEmpty { print("   suggestions: \(dictionary.suggestions(for: word, in: kind))") }
+            }
+            print("dict probe: periodic table \(PeriodicTable.elements.count) elements; search('철') = \(PeriodicTable.search("철").map(\.sym)); search('26') = \(PeriodicTable.search("26").map(\.ko)); search('칼륨') = \(PeriodicTable.search("칼륨").map(\.sym))")
+        }
         if let what = ProcessInfo.processInfo.environment["ATFM_PROBE_AUTOSCROLL"] {
             // "js" prints the page agent call; "script" prints the Chrome AppleScript (for osacompile checks).
             switch what {

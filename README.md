@@ -27,6 +27,11 @@
     <td align="center"><img src="docs/screenshots/ai.png" width="230"><br><b>간편 AI</b><br><sub>Gemini · 웹 검색 출처</sub></td>
     <td align="center"><img src="docs/screenshots/awake.png" width="230"><br><b>절전 방지</b><br><sub>지속 시간 · 덮개 닫아도 유지</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/dictionary.png" width="230"><br><b>사전 · 주기율표</b><br><sub>118개 원소 · 한글 이름 · 성질</sub></td>
+    <td align="center"><img src="docs/screenshots/dictionary-korean.png" width="230"><br><b>사전 · 국어/영어</b><br><sub>macOS 내장 뉴에이스 사전 · 동음이의어</sub></td>
+    <td></td>
+  </tr>
 </table>
 
 <p>
@@ -89,6 +94,14 @@
     탭의 단축키 카드에서 조합을 클릭한 뒤 새 키를 눌러 바꾸고, ↺ 로 하나씩 또는 "모두 기본값으로" 되돌릴 수 있음
 - **미니 메모** 탭: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
   전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
+- **사전** 탭: 영어 · 국어 · 주기율표
+  - **영어**: macOS에 내장된 뉴에이스 영한·한영사전(오프라인)으로 영어 단어 → 우리말 뜻·발음·예문, 한국어 → 영어 표현.
+    Oxford 영영사전이 켜져 있으면 영영 풀이도 함께, 없으면 dictionaryapi.dev(무료)로 영영 풀이를 온라인으로 가져옴
+  - **국어**: 뉴에이스 국어사전(오프라인)으로 동음이의어를 전부 표시(사과 → 四果·四科·沙果…). 없는 단어는 비슷한 표제어 제안
+  - 사전이 내려받아져 있지 않으면 안내 카드 + "사전 앱 열기". "사전 앱에서 보기"로 `dict://` 링크 열기. 클립보드의 짧은 단어를 자동 입력
+  - **주기율표**: 118개 원소를 한 화면에(족별 색, 란타넘·악티늄족 포함). 이름(한글·옛 이름·영어)·기호·번호로 검색, 원소를 누르면
+    원자량 · 주기/족/블록 · 실온 상태 · 전자 배치 · 전기음성도 · 밀도 · 녹는점/끓는점 · 발견 + 위키백과 링크.
+    데이터: [Bowserinator/Periodic-Table-JSON](https://github.com/Bowserinator/Periodic-Table-JSON) (CC BY-SA 3.0) + 대한화학회 표기 한글 이름
 - **자동 스크롤** 탭 (YouTube 쇼츠)
   - 브라우저의 쇼츠 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작
   - **반복 횟수**: 1이면 한 번 보고 넘기고, N이면 같은 쇼츠를 N번 본 뒤 넘김. 손으로 위로 올려 다시 봐도 상관없이, 그 편이 끝나면 또 넘김
@@ -146,6 +159,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_DEBUG_DICT="english\|korean\|periodic|검색어"` | 사전 탭을 해당 섹션·검색어로 열어 둡니다 (스냅샷용); `ATFM_PROBE_DICT=단어 ATFM --probe`는 사전 조회를 출력 |
 | `ATFM_DEBUG_CLEANUP_SCAN=1` | 빠른 동작 탭의 앱 정리 검사를 실행 직후 자동으로 돌립니다 (스냅샷용) |
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
@@ -180,6 +194,7 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
+├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
 ├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)

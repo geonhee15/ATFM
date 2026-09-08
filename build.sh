@@ -65,6 +65,7 @@ fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp build/ATFMMediaRemote.dylib "$APP/Contents/Resources/ATFMMediaRemote.dylib"
 cp Resources/mediaremote.pl "$APP/Contents/Resources/mediaremote.pl"
+cp Resources/elements.json "$APP/Contents/Resources/elements.json"
 
 xattr -cr "$APP"
 # A stable signing identity keeps TCC grants (Screen Recording, Automation) across rebuilds;

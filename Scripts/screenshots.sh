@@ -31,10 +31,11 @@ json.dump([{"id":str(uuid.uuid4()),"title":"내일 서울 날씨","createdAt":is
  open(D+"/gemini-chats.json","w"), ensure_ascii=False)
 PY
 saved_clip="$(pbpaste 2>/dev/null || true)"
-shot() {  # shot <tab> <delay> [extra env...]
+shot() {  # shot <tab> <delay> [extra env...]   (SHOT_NAME overrides the output file name)
   local tab=$1 delay=$2; shift 2
-  pkill -x ATFM 2>/dev/null; sleep 0.4; rm -f "$OUT/$tab.png"
-  (env ATFM_DEBUG_DATA_DIR="$D" ATFM_TAB="$tab" ATFM_AUTO_SHOW=1 ATFM_SNAPSHOT="$OUT/$tab.png" ATFM_SNAPSHOT_DELAY="$delay" ATFM_PANEL_HEIGHT=640 "$@" "$APP" > "$D/log-$tab.txt" 2>&1 &)
+  local name="${SHOT_NAME:-$tab}"
+  pkill -x ATFM 2>/dev/null; sleep 0.4; rm -f "$OUT/$name.png"
+  (env ATFM_DEBUG_DATA_DIR="$D" ATFM_TAB="$tab" ATFM_AUTO_SHOW=1 ATFM_SNAPSHOT="$OUT/$name.png" ATFM_SNAPSHOT_DELAY="$delay" ATFM_PANEL_HEIGHT=640 "$@" "$APP" > "$D/log-$name.txt" 2>&1 &)
 }
 shot clipboard 9; sleep 2
 for t in "https://www.youtube.com/watch?v=aqz-KE-bpKQ" "회의 15:00 회의실 B로 변경" "let total = items.reduce(0) { \$0 + \$1.price }" "ATFM: Additional Things For Mac" "010-1234-5678"; do printf '%s' "$t" | pbcopy; sleep 0.9; done
@@ -44,6 +45,9 @@ for tab in checklist notes awake system network actions tools autoscroll convert
   if [[ $tab == actions ]]; then shot "$tab" 7 ATFM_DEBUG_CLEANUP_SCAN=1; sleep 10; continue; fi
   shot "$tab" "$d"; sleep $((d + 3))
 done
+SHOT_NAME=dictionary shot dictionary 4 ATFM_DEBUG_DICT="periodic|Fe"; sleep 7
+SHOT_NAME=dictionary-korean shot dictionary 4 ATFM_DEBUG_DICT="korean|사과"; sleep 7
+unset SHOT_NAME
 # player + floating mini player with a made-up track
 mini_enabled="$(defaults read com.geonhee.atfm miniPlayerEnabled 2>/dev/null || echo unset)"
 defaults write com.geonhee.atfm miniPlayerEnabled -bool true

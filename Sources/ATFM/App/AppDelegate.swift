@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let downloader = MediaDownloader()
     private let screenTools = ScreenTools()
     private let autoScroller = AutoScroller()
+    private let dictionary = DictionaryHub()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -84,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes,
+                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dictionary: dictionary,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
@@ -146,6 +147,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Debug hooks (dev only): start keep-awake / send a chat prompt right after launch.
         if env["ATFM_DEBUG_AWAKE"] == "1" { keepAwake.setActive(true) }
+        if let spec = env["ATFM_DEBUG_DICT"] {   // "english|apple", "korean|사과", "periodic|26"
+            let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
+            if let section = DictionaryHub.Section(rawValue: parts.first ?? "") { dictionary.section = section }
+            if parts.count > 1 {
+                if dictionary.section == .periodic {
+                    dictionary.elementQuery = parts[1]
+                    dictionary.selectElement(PeriodicTable.search(parts[1]).first)
+                } else {
+                    dictionary.query = parts[1]
+                    dictionary.lookup()
+                }
+            }
+        }
         if env["ATFM_DEBUG_CLEANUP_SCAN"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { self.cleaner?.scan() } }
         }
