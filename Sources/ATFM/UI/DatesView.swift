@@ -94,6 +94,16 @@ struct DatesView: View {
                                 store.selectedDay = day
                                 beginAdd(on: day, dday: false)
                             }
+                            .contextMenu {
+                                Button { store.selectedDay = day; beginAdd(on: day, dday: false) } label: { Label("이 날에 일정 추가", systemImage: "plus") }
+                                let dayEvents = store.events(on: day)
+                                if !dayEvents.isEmpty {
+                                    Divider()
+                                    ForEach(dayEvents) { event in
+                                        Menu(event.title.isEmpty ? "(제목 없음)" : event.title) { contextMenu(for: event) }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -121,12 +131,13 @@ struct DatesView: View {
                 .foregroundStyle(Theme.accent)
             }
             if events.isEmpty {
-                Text("일정 없음 · 날짜를 더블클릭하거나 + 로 추가")
+                Text("일정 없음 · 더블클릭 또는 우클릭으로 추가")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             } else {
                 ForEach(events) { event in
                     EventRow(entry: event) { begin(edit: event) }
+                        .contextMenu { contextMenu(for: event) }
                 }
             }
         }
@@ -163,6 +174,7 @@ struct DatesView: View {
             } else {
                 ForEach(items) { info in
                     DDayRow(info: info) { begin(edit: info.entry) }
+                        .contextMenu { contextMenu(for: info.entry) }
                     if info.id != items.last?.id { Divider() }
                 }
             }
@@ -171,6 +183,61 @@ struct DatesView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+    }
+
+    // MARK: Context menu (우클릭)
+
+    @ViewBuilder
+    private func contextMenu(for entry: DateEntry) -> some View {
+        Button { begin(edit: entry) } label: { Label("수정…", systemImage: "pencil") }
+        Divider()
+        Button {
+            var copy = entry; copy.showsInDday.toggle()
+            if !copy.showsInDday && !copy.showsInCalendar { copy.showsInCalendar = true }
+            store.update(copy)
+        } label: {
+            Label(entry.showsInDday ? "D-day에서 빼기" : "D-day에 표시", systemImage: "flag")
+        }
+        Button {
+            var copy = entry; copy.showsInCalendar.toggle()
+            if !copy.showsInCalendar && !copy.showsInDday { copy.showsInDday = true }
+            store.update(copy)
+        } label: {
+            Label(entry.showsInCalendar ? "캘린더에서 빼기" : "캘린더에 표시", systemImage: "calendar")
+        }
+        if entry.showsInDday {
+            Button {
+                var copy = entry; copy.ddayStyle = entry.style == .elapsed ? .countdown : .elapsed
+                store.update(copy)
+            } label: {
+                Label(entry.style == .elapsed ? "크게 표시: 기념일까지 D-" : "크게 표시: 처음부터 D+", systemImage: "arrow.left.arrow.right")
+            }
+        }
+        Menu("반복") {
+            ForEach(DateEntry.Repeat.allCases) { rule in
+                Button {
+                    var copy = entry; copy.repeatRule = rule; store.update(copy)
+                } label: {
+                    if entry.repeatRule == rule { Label(rule.title, systemImage: "checkmark") } else { Text(rule.title) }
+                }
+            }
+        }
+        Menu("색") {
+            ForEach(Array(DateEntry.palette.enumerated()), id: \.offset) { index, _ in
+                Button {
+                    var copy = entry; copy.colorIndex = index; store.update(copy)
+                } label: {
+                    let name = ["파랑", "빨강", "주황", "초록", "보라", "분홍", "회색"][index]
+                    if entry.colorIndex == index { Label(name, systemImage: "checkmark") } else { Text(name) }
+                }
+            }
+        }
+        Button {
+            var copy = entry; copy.id = UUID(); copy.title += " 사본"; copy.createdAt = Date()
+            store.add(copy)
+        } label: { Label("복제", systemImage: "plus.square.on.square") }
+        Divider()
+        Button(role: .destructive) { store.delete(entry.id) } label: { Label("삭제", systemImage: "trash") }
     }
 
     // MARK: Editing
@@ -331,7 +398,7 @@ private struct EventRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: edit)
         .onHover { hovering = $0 }
-        .help("클릭해서 편집")
+        .help("클릭: 편집 · 우클릭: 더 많은 옵션")
     }
 }
 
@@ -373,7 +440,7 @@ private struct DDayRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: edit)
         .onHover { hovering = $0 }
-        .help("클릭해서 편집")
+        .help("클릭: 편집 · 우클릭: 더 많은 옵션")
     }
 }
 
