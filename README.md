@@ -72,6 +72,9 @@
   - **앱별 사용량**: `nettop` 을 스트리밍해서 2초마다 앱별 ↓↑ 속도 표시
   - 속도 측정: Cloudflare 서버로 다운로드/업로드 Mbps 와 지연 시간 측정 (버튼을 눌렀을 때만)
 - **빠른 동작** 탭
+  - **리소스 잡아먹는 앱 정리**: "검사"를 누르면 3초 동안 실행 중인 Dock 앱의 CPU · 메모리 · 네트워크와 화면 위 창 개수를 재서,
+    백그라운드에서 CPU/네트워크를 태우거나 창 없이 메모리를 쥐고 있는 앱을 체크된 상태로 제안. 지금 사용 중인 앱·재생 중인 앱은
+    제외, 방패 버튼으로 앱을 영구 보호. "선택한 N개 종료"는 기본적으로 정상 종료(저장 확인 가능)이고 "강제 종료"를 켜면 즉시 kill
   - ATFM 다크 모드: 시스템 설정은 그대로 두고 이 창만 라이트/다크/시스템으로 전환
   - 키보드 백라이트 켜기/끄기 (CoreBrightness, 권한 불필요)
   - 화면 잠금(⌃⌘Q 와 동일하게 암호 화면으로), 화면 보호기 시작, 디스플레이 끄기
@@ -143,6 +146,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_DEBUG_CLEANUP_SCAN=1` | 빠른 동작 탭의 앱 정리 검사를 실행 직후 자동으로 돌립니다 (스냅샷용) |
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
@@ -174,7 +178,7 @@ Sources/ATFM
 ├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널, LRCLIB 가사
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
-├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
+├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
 ├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)

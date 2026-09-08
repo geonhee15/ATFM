@@ -61,6 +61,7 @@ struct RootView: View {
     var networkMonitor: NetworkMonitor
     var speedTester: SpeedTester
     var quickActions: QuickActions
+    var cleaner: AppCleaner
     var checklist: ChecklistStore
     var notes: QuickNotesStore
     var keepAwake: KeepAwake
@@ -103,7 +104,7 @@ struct RootView: View {
                 case .network:
                     NetworkView(monitor: networkMonitor, tester: speedTester)
                 case .actions:
-                    QuickActionsView(appState: appState, quick: quickActions)
+                    QuickActionsView(appState: appState, quick: quickActions, cleaner: cleaner)
                 case .tools:
                     ScreenToolsView(tools: screenTools)
                 case .autoscroll:

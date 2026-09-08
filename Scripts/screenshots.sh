@@ -41,6 +41,7 @@ for t in "https://www.youtube.com/watch?v=aqz-KE-bpKQ" "회의 15:00 회의실 B
 printf '%s' "https://www.youtube.com/watch?v=aqz-KE-bpKQ" | pbcopy; sleep 8
 for tab in checklist notes awake system network actions tools autoscroll convert ai settings; do
   d=4; [[ $tab == system || $tab == network ]] && d=7
+  if [[ $tab == actions ]]; then shot "$tab" 7 ATFM_DEBUG_CLEANUP_SCAN=1; sleep 10; continue; fi
   shot "$tab" "$d"; sleep $((d + 3))
 done
 # player + floating mini player with a made-up track

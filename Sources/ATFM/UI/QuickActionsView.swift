@@ -3,11 +3,13 @@ import SwiftUI
 struct QuickActionsView: View {
     @Bindable var appState: AppState
     @Bindable var quick: QuickActions
+    @Bindable var cleaner: AppCleaner
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 header
+                AppCleanupCard(cleaner: cleaner)
                 appearanceRow
                 keyboardRow
                 lockRow

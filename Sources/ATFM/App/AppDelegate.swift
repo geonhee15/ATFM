@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickActions = QuickActions()
     private var checklist: ChecklistStore?
     private var notes: QuickNotesStore?
+    private var cleaner: AppCleaner?
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
     private let converter = FileConverter()
@@ -56,6 +57,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.systemMonitor = systemMonitor
         appState.networkMonitor = networkMonitor
         appState.quickActions = quickActions
+        let cleaner = AppCleaner(resolver: identityResolver, network: networkMonitor)
+        cleaner.restoreMonitors = { [weak self] in self?.appState.updateMonitors() }
+        cleaner.playingBundleID = { [weak self] in
+            guard let track = self?.nowPlaying.track, track.isPlaying else { return nil }
+            return track.sourceBundleID
+        }
+        self.cleaner = cleaner
 
         let checklist = ChecklistStore(directory: store.directory)
         self.checklist = checklist
@@ -76,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, checklist: checklist, notes: notes,
+                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
@@ -138,6 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Debug hooks (dev only): start keep-awake / send a chat prompt right after launch.
         if env["ATFM_DEBUG_AWAKE"] == "1" { keepAwake.setActive(true) }
+        if env["ATFM_DEBUG_CLEANUP_SCAN"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { self.cleaner?.scan() } }
+        }
         if let prompt = env["ATFM_DEBUG_GEMINI_PROMPT"], !prompt.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 MainActor.assumeIsolated {
