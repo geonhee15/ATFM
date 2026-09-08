@@ -51,6 +51,8 @@
   - 최근 결과 목록에서 클릭 한 번으로 다시 복사
   - **단축키**: 기본 ⌘⇧1(텍스트 복사) · ⌘⇧2(색상 추출). 다른 앱을 쓰는 중에도 동작(Carbon `RegisterEventHotKey`, 손쉬운 사용 권한 불필요).
     탭의 단축키 카드에서 조합을 클릭한 뒤 새 키를 눌러 바꾸고, ↺ 로 하나씩 또는 "모두 기본값으로" 되돌릴 수 있음
+- **미니 메모** 탭: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
+  전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
 - **자동 스크롤** 탭 (YouTube 쇼츠)
   - 브라우저의 쇼츠 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작
   - **반복 횟수**: 1이면 한 번 보고 넘기고, N이면 같은 쇼츠를 N번 본 뒤 넘김. 손으로 위로 올려 다시 봐도 상관없이, 그 편이 끝나면 또 넘김
@@ -108,6 +110,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari` | 쇼츠 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
@@ -137,6 +140,7 @@ Sources/ATFM
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
+├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
 ├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)

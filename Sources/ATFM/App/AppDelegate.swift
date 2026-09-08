@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let speedTester = SpeedTester()
     private let quickActions = QuickActions()
     private var checklist: ChecklistStore?
+    private var notes: QuickNotesStore?
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
     private let converter = FileConverter()
@@ -58,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let checklist = ChecklistStore(directory: store.directory)
         self.checklist = checklist
+        let notesDirectory = ProcessInfo.processInfo.environment["ATFM_DEBUG_NOTES_DIR"].map { URL(fileURLWithPath: $0) } ?? store.directory
+        let notes = QuickNotesStore(directory: notesDirectory)
+        self.notes = notes
         let gemini = GeminiChat(directory: store.directory)
         gemini.copyToPasteboard = { [weak monitor] text in
             let pasteboard = NSPasteboard.general
@@ -72,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, checklist: checklist,
+                            quickActions: quickActions, checklist: checklist, notes: notes,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
@@ -221,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         downloader.cancel()
         screenTools.hotkeys.unregisterAll()
         autoScroller.stop()
+        notes?.flush()
         nowPlaying.stop()
     }
 
