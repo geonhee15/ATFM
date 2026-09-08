@@ -150,6 +150,9 @@ Xcode 없이 Command Line Tools만 있으면 됩니다 (macOS 14+, Swift 5.9+).
 
 `build.sh` 는 `swiftc` 로 직접 컴파일한 뒤 `.app` 번들을 조립하고 서명합니다. 키체인에 코드 서명 인증서가 있으면
 (`ATFM_SIGN_IDENTITY`, 기본값 `Omni Dev Signing`) 그걸로 서명해 화면 기록·자동화 권한이 재빌드 후에도 유지되고, 없으면 ad-hoc 서명합니다.
+릴리즈 빌드는 서명 검증을 통과한 사본을 **`~/Applications/ATFM.app`** 에 설치하고(`ATFM_INSTALL_DIR`로 변경 가능) `--run`은 그 사본을 엽니다.
+프로젝트 폴더가 iCloud 동기화(데스크탑) 안에 있으면 Finder가 번들에 `com.apple.FinderInfo`를 계속 붙여 서명이 깨지고, 그러면 macOS가
+화면 기록 같은 권한을 무시하기 때문입니다. `build/ATFM.app`은 스냅샷 등 개발용으로만 씁니다.
 Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 첫 빌드는 SDK 모듈 캐시(`build/ModuleCache`)를 만드느라 몇 분 걸리고, 그 다음부터는 수 초면 끝납니다.
 

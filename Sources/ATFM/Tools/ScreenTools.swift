@@ -24,7 +24,7 @@ final class ScreenTools {
     }
 
     private(set) var status: Status = .idle
-    private(set) var hasScreenAccess = CGPreflightScreenCaptureAccess()
+    private(set) var hasScreenAccess = ScreenTools.probeScreenAccess()
     private(set) var records: [ToolRecord] = []
 
     /// Hides the bubble before an overlay / the sampler appears (set by AppDelegate).
@@ -41,14 +41,46 @@ final class ScreenTools {
     // MARK: Screen Recording access
 
     func refreshAccess() {
-        hasScreenAccess = CGPreflightScreenCaptureAccess()
+        hasScreenAccess = Self.probeScreenAccess()
     }
 
     /// Shows the system prompt (macOS lists ATFM under Screen Recording); the grant applies after a relaunch.
     @discardableResult
     func requestScreenAccess() -> Bool {
-        hasScreenAccess = CGRequestScreenCaptureAccess()
+        let granted = CGRequestScreenCaptureAccess()
+        hasScreenAccess = granted || Self.probeScreenAccess()
         return hasScreenAccess
+    }
+
+    /// `CGPreflightScreenCaptureAccess` alone is unreliable on recent macOS (it can stay false after a
+    /// grant until who-knows-when), so also check the classic tell: other apps' window titles are only
+    /// readable from CGWindowList when Screen Recording is allowed.
+    static func probeScreenAccess() -> Bool {
+        let preflight = CGPreflightScreenCaptureAccess()
+        let names = canReadOtherWindowNames()
+        NSLog("ATFM: screen recording preflight=%d windowNames=%d", preflight ? 1 : 0, names ? 1 : 0)
+        // Also leave a note next to the app data so support questions can be answered without the log.
+        if let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let url = base.appendingPathComponent("ATFM/screen-access.txt")
+            let line = "\(Date()) preflight=\(preflight) windowNames=\(names) bundle=\(Bundle.main.bundlePath)\n"
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
+        return preflight || names
+    }
+
+    static func canReadOtherWindowNames() -> Bool {
+        guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        let me = ProcessInfo.processInfo.processIdentifier
+        var sawForeignWindow = false
+        for window in info {
+            guard let pid = window[kCGWindowOwnerPID as String] as? pid_t, pid != me,
+                  (window[kCGWindowLayer as String] as? Int ?? 0) == 0 else { continue }
+            sawForeignWindow = true
+            if let name = window[kCGWindowName as String] as? String, !name.isEmpty { return true }
+        }
+        return !sawForeignWindow && false
     }
 
     func openScreenRecordingSettings() {

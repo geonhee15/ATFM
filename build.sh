@@ -67,7 +67,10 @@ cp build/ATFMMediaRemote.dylib "$APP/Contents/Resources/ATFMMediaRemote.dylib"
 cp Resources/mediaremote.pl "$APP/Contents/Resources/mediaremote.pl"
 cp Resources/elements.json "$APP/Contents/Resources/elements.json"
 
-xattr -cr "$APP"
+# Finder likes to stamp com.apple.FinderInfo on the .app folder once it has been launched; codesign
+# refuses to seal a bundle carrying it, and an unsealed signature makes TCC ignore every permission grant.
+xattr -c "$APP" 2>/dev/null || true
+xattr -cr "$APP" 2>/dev/null || true
 # A stable signing identity keeps TCC grants (Screen Recording, Automation) across rebuilds;
 # ad-hoc signatures change every build and macOS forgets the permission.
 SIGN_IDENTITY="${ATFM_SIGN_IDENTITY:-Omni Dev Signing}"
@@ -76,9 +79,30 @@ if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_IDENT
 else
   codesign --force --sign - "$APP"
 fi
+if ! codesign --verify --strict "$APP" 2>/dev/null; then
+  echo "✖ codesign did not produce a valid sealed signature:"
+  codesign --verify --strict --verbose=2 "$APP" 2>&1 | sed 's/^/   /'
+  exit 1
+fi
 echo "✔ built $APP"
+
+# The project lives in an iCloud-synced folder, where Finder keeps re-stamping the bundle with
+# com.apple.FinderInfo and breaking strict signature validation. The copy people actually run
+# therefore goes to ~/Applications (not synced); build/ATFM.app stays for dev snapshots.
+INSTALL_APP="${ATFM_INSTALL_DIR:-$HOME/Applications}/$APP_NAME.app"
+if [[ "$CONFIG" != "debug" ]]; then
+  mkdir -p "$(dirname "$INSTALL_APP")"
+  rm -rf "$INSTALL_APP"
+  ditto --noextattr --noqtn "$APP" "$INSTALL_APP"
+  if codesign --verify --strict "$INSTALL_APP" 2>/dev/null; then
+    echo "✔ installed $INSTALL_APP"
+  else
+    echo "✖ installed copy failed signature check"; exit 1
+  fi
+fi
 
 if [[ $RUN -eq 1 ]]; then
   pkill -x "$APP_NAME" 2>/dev/null || true
-  open "$APP"
+  sleep 0.5
+  if [[ "$CONFIG" != "debug" && -d "$INSTALL_APP" ]]; then open "$INSTALL_APP"; else open "$APP"; fi
 fi
