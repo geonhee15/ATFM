@@ -4,6 +4,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case clipboard
     case checklist
     case notes
+    case dates
     case dictionary
     case awake
     case system
@@ -23,6 +24,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .clipboard: return "doc.on.clipboard"
         case .checklist: return "checklist"
         case .notes: return "note.text"
+        case .dates: return "calendar"
         case .dictionary: return "character.book.closed"
         case .awake: return "moon.zzz"
         case .system: return "cpu"
@@ -42,6 +44,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .clipboard: return "클립보드"
         case .checklist: return "체크리스트"
         case .notes: return "미니 메모"
+        case .dates: return "날짜"
         case .dictionary: return "사전"
         case .awake: return "절전 방지"
         case .system: return "시스템"
@@ -67,6 +70,7 @@ struct RootView: View {
     var cleaner: AppCleaner
     var checklist: ChecklistStore
     var notes: QuickNotesStore
+    var dates: DateStore
     var dictionary: DictionaryHub
     var keepAwake: KeepAwake
     var gemini: GeminiChat
@@ -101,6 +105,8 @@ struct RootView: View {
                     ChecklistView(store: checklist)
                 case .notes:
                     QuickNotesView(store: notes)
+                case .dates:
+                    DatesView(store: dates)
                 case .dictionary:
                     DictionaryView(hub: dictionary)
                 case .awake:

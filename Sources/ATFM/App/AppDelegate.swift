@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickActions = QuickActions()
     private var checklist: ChecklistStore?
     private var notes: QuickNotesStore?
+    private var dates: DateStore?
     private var cleaner: AppCleaner?
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
@@ -71,6 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let notesDirectory = ProcessInfo.processInfo.environment["ATFM_DEBUG_NOTES_DIR"].map { URL(fileURLWithPath: $0) } ?? store.directory
         let notes = QuickNotesStore(directory: notesDirectory)
         self.notes = notes
+        let dates = DateStore(directory: store.directory)
+        self.dates = dates
         let gemini = GeminiChat(directory: store.directory)
         gemini.copyToPasteboard = { [weak monitor] text in
             let pasteboard = NSPasteboard.general
@@ -85,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dictionary: dictionary,
+                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, dictionary: dictionary,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
@@ -251,6 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         screenTools.hotkeys.unregisterAll()
         autoScroller.stop()
         notes?.flush()
+        dates?.flush()
         nowPlaying.stop()
     }
 

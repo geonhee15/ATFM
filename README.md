@@ -30,7 +30,7 @@
   <tr>
     <td align="center"><img src="docs/screenshots/dictionary.png" width="230"><br><b>사전 · 주기율표</b><br><sub>118개 원소 · 한글 이름 · 성질</sub></td>
     <td align="center"><img src="docs/screenshots/dictionary-korean.png" width="230"><br><b>사전 · 국어/영어</b><br><sub>macOS 내장 뉴에이스 사전 · 동음이의어</sub></td>
-    <td></td>
+    <td align="center"><img src="docs/screenshots/dates.png" width="230"><br><b>날짜</b><br><sub>시계 · 전용 달력 · D-days</sub></td>
   </tr>
 </table>
 
@@ -94,6 +94,13 @@
     탭의 단축키 카드에서 조합을 클릭한 뒤 새 키를 눌러 바꾸고, ↺ 로 하나씩 또는 "모두 기본값으로" 되돌릴 수 있음
 - **미니 메모** 탭: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
   전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
+- **날짜** 탭
+  - 맨 위에 오늘 날짜(요일)와 초 단위 시계, 올해 며칠째 · 몇 주차 · 남은 날
+  - **전용 달력**: 월 이동, 날짜 클릭으로 그날 일정 보기, 더블클릭 또는 "일정 추가"로 새 일정(제목 · 날짜 · 시간 · 메모 · 색 7종).
+    매월/매년 반복 일정은 달력에도 반복 표시. 데이터는 `dates.json`에 저장(다른 캘린더 앱과 무관한 ATFM 전용)
+  - **D-days**: 일정에서 "D-day에 표시"를 켜면 목록에 올라오고, 달력엔 없는 기념일도 따로 추가 가능.
+    반복 없음 → 지나면 D+N, 매월 → 다음 그 날짜까지 D-N, 매년 → 다음 기념일까지 D-N + N주년 + 처음부터 D+N.
+    D-Day는 빨강, 다가오는 순으로 정렬
 - **사전** 탭: 영어 · 국어 · 주기율표
   - **영어**: macOS에 내장된 뉴에이스 영한·한영사전(오프라인)으로 영어 단어 → 우리말 뜻·발음·예문, 한국어 → 영어 표현.
     Oxford 영영사전이 켜져 있으면 영영 풀이도 함께, 없으면 dictionaryapi.dev(무료)로 영영 풀이를 온라인으로 가져옴
@@ -162,6 +169,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 |---|---|
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
+| `ATFM_DEBUG_DATES_EDITOR=1` | 날짜 탭 위에 일정 편집 폼을 인라인으로 띄웁니다 (스냅샷용) |
 | `ATFM_DEBUG_DICT="english\|korean\|periodic|검색어"` | 사전 탭을 해당 섹션·검색어로 열어 둡니다 (스냅샷용); `ATFM_PROBE_DICT=단어 ATFM --probe`는 사전 조회를 출력 |
 | `ATFM_DEBUG_CLEANUP_SCAN=1` | 빠른 동작 탭의 앱 정리 검사를 실행 직후 자동으로 돌립니다 (스냅샷용) |
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
@@ -197,6 +205,7 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
+├── Dates/       날짜 (DateStore: 일정·D-day 모델, 반복 계산, dates.json)
 ├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
 ├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)

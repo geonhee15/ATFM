@@ -29,6 +29,19 @@ json.dump([{"id":str(uuid.uuid4()),"title":"내일 서울 날씨","createdAt":is
  {"id":str(uuid.uuid4()),"role":"user","text":"내일 서울 날씨 어때? 우산 챙겨야 해?","date":iso(now-datetime.timedelta(minutes=10))},
  {"id":str(uuid.uuid4()),"role":"model","text":"내일 서울은 **오전에 흐리고 오후 늦게 비**가 올 가능성이 높아요.\n\n- 낮 최고 24°C, 아침 최저 17°C\n- 강수 확률 60% (16시 이후)\n- 바람은 약한 편\n\n오후에 외출 계획이 있으면 **작은 우산**을 챙기는 게 좋겠어요.","date":iso(now-datetime.timedelta(minutes=9)),"sources":[{"title":"기상청 날씨누리","uri":"https://www.weather.go.kr/"}]}]}],
  open(D+"/gemini-chats.json","w"), ensure_ascii=False)
+today=datetime.date.today()
+def ev(title,d,**kw):
+    base={"id":str(uuid.uuid4()),"title":title,"year":d.year,"month":d.month,"day":d.day,"note":"","colorIndex":0,"showsInCalendar":True,"showsInDday":False,"repeatRule":"none","createdAt":"2026-09-01T00:00:00Z"}
+    base.update(kw); return base
+json.dump([
+ ev("팀 회의", today+datetime.timedelta(days=2), hour=15, minute=0),
+ ev("치과 예약", today+datetime.timedelta(days=5), hour=10, minute=30, colorIndex=2),
+ ev("제주 여행", today+datetime.timedelta(days=12), colorIndex=3, showsInDday=True),
+ ev("헬스장 등록", today, hour=19, minute=0, colorIndex=1),
+ ev("사귄 날", datetime.date(2024,3,14), colorIndex=5, showsInCalendar=False, showsInDday=True, repeatRule="yearly"),
+ ev("월급날", datetime.date(2026,1,25), colorIndex=3, showsInCalendar=False, showsInDday=True, repeatRule="monthly"),
+ ev("자격증 시험", today+datetime.timedelta(days=40), colorIndex=1, showsInCalendar=False, showsInDday=True),
+], open(D+"/dates.json","w"), ensure_ascii=False)
 PY
 saved_clip="$(pbpaste 2>/dev/null || true)"
 shot() {  # shot <tab> <delay> [extra env...]   (SHOT_NAME overrides the output file name)
@@ -40,7 +53,7 @@ shot() {  # shot <tab> <delay> [extra env...]   (SHOT_NAME overrides the output 
 shot clipboard 9; sleep 2
 for t in "https://www.youtube.com/watch?v=aqz-KE-bpKQ" "회의 15:00 회의실 B로 변경" "let total = items.reduce(0) { \$0 + \$1.price }" "ATFM: Additional Things For Mac" "010-1234-5678"; do printf '%s' "$t" | pbcopy; sleep 0.9; done
 printf '%s' "https://www.youtube.com/watch?v=aqz-KE-bpKQ" | pbcopy; sleep 8
-for tab in checklist notes awake system network actions tools autoscroll convert ai settings; do
+for tab in checklist notes dates awake system network actions tools autoscroll convert ai settings; do
   d=4; [[ $tab == system || $tab == network ]] && d=7
   if [[ $tab == actions ]]; then shot "$tab" 7 ATFM_DEBUG_CLEANUP_SCAN=1; sleep 10; continue; fi
   shot "$tab" "$d"; sleep $((d + 3))
