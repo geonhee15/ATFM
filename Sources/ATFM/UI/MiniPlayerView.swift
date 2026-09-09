@@ -35,10 +35,14 @@ struct MiniPlayerView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
                         .padding(.trailing, 36)
-                    Text(monitor.track?.artist ?? "")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        NowPlayingBars(isPlaying: monitor.track?.isPlaying ?? false)
+                            .frame(width: 15, height: 12)
+                        Text(monitor.track?.artist ?? "")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 2)
                     ProgressLine(track: monitor.track, now: monitor.now)
                 }
@@ -364,5 +368,38 @@ struct TransportControls: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+/// Tiny five-bar "now playing" visualizer. Bars sway while playing (smooth, phase-shifted sines, no
+/// audio tap needed) and settle low when paused.
+struct NowPlayingBars: View {
+    let isPlaying: Bool
+    var color: Color = Theme.accent
+
+    private static let frequencies: [Double] = [3.3, 4.7, 2.9, 4.1, 3.7]
+    private static let phases: [Double] = [0.0, 1.3, 2.1, 0.7, 2.8]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !isPlaying)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .bottom, spacing: 1.5) {
+                ForEach(0..<5, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1, style: .continuous)
+                        .fill(color.opacity(isPlaying ? 0.9 : 0.45))
+                        .frame(width: 2, height: height(at: index, time: t))
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .animation(.easeOut(duration: 0.25), value: isPlaying)
+        }
+    }
+
+    private func height(at index: Int, time: Double) -> CGFloat {
+        guard isPlaying else { return 3 }
+        let f = Self.frequencies[index], p = Self.phases[index]
+        let wave = 0.5 + 0.5 * sin(time * f + p) * 0.7 + 0.3 * sin(time * f * 1.9 + p * 2) * 0.5
+        return CGFloat(3 + max(0, min(1, wave)) * 9)
     }
 }

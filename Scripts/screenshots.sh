@@ -65,7 +65,7 @@ unset SHOT_NAME
 mini_enabled="$(defaults read com.geonhee.atfm miniPlayerEnabled 2>/dev/null || echo unset)"
 defaults write com.geonhee.atfm miniPlayerEnabled -bool true
 shot player 4 ATFM_DEBUG_NOWPLAYING_SAMPLE=1 ATFM_SNAPSHOT_MINI="$OUT/miniplayer.png"; sleep 8
-if [[ $mini_enabled == unset ]]; then defaults delete com.geonhee.atfm miniPlayerEnabled; else defaults write com.geonhee.atfm miniPlayerEnabled -bool "$mini_enabled"; fi
+if [[ $mini_enabled == unset ]]; then defaults delete com.geonhee.atfm miniPlayerEnabled; elif [[ $mini_enabled == 1 ]]; then defaults write com.geonhee.atfm miniPlayerEnabled -bool true; else defaults write com.geonhee.atfm miniPlayerEnabled -bool false; fi
 pkill -x ATFM 2>/dev/null; sleep 0.4
 for mode in hud-text hud-color; do rm -f "$OUT/$mode.png"; (env ATFM_DEBUG_DATA_DIR="$D" ATFM_DEBUG_TOOLS=$mode ATFM_SNAPSHOT_HUD="$OUT/$mode.png" ATFM_SNAPSHOT_DELAY=0.5 "$APP" > /dev/null 2>&1 &); sleep 3; pkill -x ATFM; sleep 0.4; done
 printf '%s' "$saved_clip" | pbcopy
