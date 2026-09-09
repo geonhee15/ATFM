@@ -41,6 +41,8 @@ final class MiniPlayerController {
     private(set) var corner: MiniPlayerCorner
     private(set) var isVisible = false
     private(set) var isLyricsExpanded: Bool
+    private(set) var liveVisualizer: Bool
+    let audio = AudioLevelMonitor()
     var currentSize: NSSize { isLyricsExpanded ? NSSize(width: Self.size.width, height: Self.size.height + Self.lyricsHeight) : Self.size }
 
     let monitor: NowPlayingMonitor
@@ -59,6 +61,7 @@ final class MiniPlayerController {
         static let corner = "miniPlayerCorner"
         static let origin = "miniPlayerOrigin"
         static let lyrics = "miniPlayerLyricsExpanded"
+        static let live = "miniPlayerLiveVisualizer"
     }
 
     init(monitor: NowPlayingMonitor) {
@@ -66,6 +69,7 @@ final class MiniPlayerController {
         lyrics = LyricsController(monitor: monitor)
         let defaults = UserDefaults.standard
         isLyricsExpanded = defaults.bool(forKey: Key.lyrics)
+        liveVisualizer = UserDefaults.standard.object(forKey: Key.live) as? Bool ?? true
         isEnabled = (defaults.object(forKey: Key.enabled) as? Bool) ?? true
         sourceFilter = MiniPlayerSourceFilter(rawValue: defaults.string(forKey: Key.source) ?? "") ?? .spotifyAndBrowsers
         showWhenPaused = (defaults.object(forKey: Key.paused) as? Bool) ?? true
@@ -183,6 +187,19 @@ final class MiniPlayerController {
             shouldShow = false
         }
         if shouldShow { show() } else { hide() }
+        syncAudio()
+    }
+
+    func setLiveVisualizer(_ on: Bool) {
+        liveVisualizer = on
+        UserDefaults.standard.set(on, forKey: Key.live)
+        syncAudio()
+    }
+
+    /// The tap only runs while the panel is visible and something is actually playing.
+    private func syncAudio() {
+        let wanted = liveVisualizer && isVisible && (monitor.track?.isPlaying ?? false)
+        if wanted { audio.start() } else { audio.stop() }
     }
 
     private func show() {

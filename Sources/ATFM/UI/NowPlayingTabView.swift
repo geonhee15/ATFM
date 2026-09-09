@@ -119,6 +119,11 @@ struct NowPlayingTabView: View {
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
             }
             Divider().padding(.horizontal, 12)
+            settingRow("소리에 반응하는 비주얼라이저", visualizerStatus) {
+                Toggle("", isOn: Binding(get: { controller.liveVisualizer }, set: { controller.setLiveVisualizer($0) }))
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            }
+            Divider().padding(.horizontal, 12)
             settingRow("위치", "플레이어를 드래그해 옮기면 그 자리를 기억해요") {
                 Picker("", selection: Binding(get: { controller.corner }, set: { controller.setCorner($0) })) {
                     ForEach(MiniPlayerCorner.allCases) { Text($0.title).tag($0) }
@@ -127,6 +132,15 @@ struct NowPlayingTabView: View {
             }
         }
         .card()
+    }
+
+    private var visualizerStatus: String {
+        guard controller.liveVisualizer else { return "끄면 소리와 상관없이 살랑거리는 애니메이션만 보여요" }
+        switch controller.audio.status {
+        case .idle: return "재생 중일 때 시스템 오디오를 읽어요. 처음엔 macOS가 '시스템 오디오 녹음' 권한을 물어봐요"
+        case .running: return controller.audio.signalSeen ? "동작 중 · 소리 감지됨" : "동작 중 · 아직 소리가 안 들어와요. 권한을 허용했는지 확인해 주세요"
+        case .unavailable(let reason): return "사용 불가 · \(reason)"
+        }
     }
 
     private func settingRow<Control: View>(_ title: String, _ subtitle: String?, @ViewBuilder control: () -> Control) -> some View {

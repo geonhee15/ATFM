@@ -26,6 +26,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>미니 플레이어의 비주얼라이저가 재생 중인 소리의 크기를 읽습니다. 녹음하거나 저장하지 않습니다.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>휴지통 비우기 같은 Finder 동작을 실행하려면 필요합니다.</string>
 	<key>NSHighResolutionCapable</key>

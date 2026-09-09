@@ -163,6 +163,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if env["ATFM_DEBUG_AUDIO_TAP"] == "1" {   // start the visualizer tap right away and log levels for a few seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                MainActor.assumeIsolated {
+                    self.miniPlayer?.audio.start()
+                    for second in 1...6 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + Double(second)) {
+                            MainActor.assumeIsolated {
+                                guard let audio = self.miniPlayer?.audio else { return }
+                                audio.debugNote("t+\(second)s")
+                                if second == 6 { audio.stop() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if env["ATFM_DEBUG_CLEANUP_SCAN"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { self.cleaner?.scan() } }
         }

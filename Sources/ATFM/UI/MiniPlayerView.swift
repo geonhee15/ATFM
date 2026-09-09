@@ -36,7 +36,8 @@ struct MiniPlayerView: View {
                         .lineLimit(1)
                         .padding(.trailing, 36)
                     HStack(spacing: 6) {
-                        NowPlayingBars(isPlaying: monitor.track?.isPlaying ?? false)
+                        NowPlayingBars(isPlaying: monitor.track?.isPlaying ?? false,
+                                       levels: controller.audio.signalSeen ? controller.audio.levels : nil)
                             .frame(width: 15, height: 12)
                         Text(monitor.track?.artist ?? "")
                             .font(.system(size: 12))
@@ -376,23 +377,37 @@ struct TransportControls: View {
 /// audio tap needed) and settle low when paused.
 struct NowPlayingBars: View {
     let isPlaying: Bool
+    /// Real band levels (0…1) from the audio tap; nil → decorative sine animation.
+    var levels: [CGFloat]? = nil
     var color: Color = Theme.accent
 
     private static let frequencies: [Double] = [3.3, 4.7, 2.9, 4.1, 3.7]
     private static let phases: [Double] = [0.0, 1.3, 2.1, 0.7, 2.8]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !isPlaying)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
+        if let levels, isPlaying {
             HStack(alignment: .bottom, spacing: 1.5) {
                 ForEach(0..<5, id: \.self) { index in
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
-                        .fill(color.opacity(isPlaying ? 0.9 : 0.45))
-                        .frame(width: 2, height: height(at: index, time: t))
+                        .fill(color.opacity(0.9))
+                        .frame(width: 2, height: 3 + (index < levels.count ? levels[index] : 0) * 9)
                 }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
-            .animation(.easeOut(duration: 0.25), value: isPlaying)
+            .animation(.linear(duration: 0.06), value: levels)
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !isPlaying)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                HStack(alignment: .bottom, spacing: 1.5) {
+                    ForEach(0..<5, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 1, style: .continuous)
+                            .fill(color.opacity(isPlaying ? 0.9 : 0.45))
+                            .frame(width: 2, height: height(at: index, time: t))
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .animation(.easeOut(duration: 0.25), value: isPlaying)
+            }
         }
     }
 
