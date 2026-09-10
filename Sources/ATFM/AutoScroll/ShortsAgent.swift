@@ -10,7 +10,10 @@ enum ShortsAgent {
             "(function(cfg){",
             "var W=window,S=W.__atfmAuto;",
             "if(!S){",
-            "S=W.__atfmAuto={cfg:{repeat:1,enabled:true},id:null,plays:0,lastT:0,t:0,d:0,advanced:0,advancedId:null,lastAdvanceAt:0,pendingId:null,pendingSince:0,step:0,lastPing:Date.now(),method:'',log:[]};",
+            "S=W.__atfmAuto={cfg:{repeat:1,enabled:true,comments:false},id:null,plays:0,lastT:0,t:0,d:0,advanced:0,advancedId:null,lastAdvanceAt:0,pendingId:null,pendingSince:0,step:0,lastPing:Date.now(),method:'',log:[],commentsId:null,commentsTries:0,commentsAt:0,commentsOpen:false};",
+            "S.commentsPanel=function(){return document.querySelector('ytd-engagement-panel-section-list-renderer[target-id=\"engagement-panel-comments-section\"]')};",
+            "S.commentsButton=function(){var bs=document.querySelectorAll('button[aria-label]');for(var i=0;i<bs.length;i++){var l=bs[i].getAttribute('aria-label')||'';if(/^(\\ub313\\uae00|View .*comment|Comments?)/i.test(l)&&!/\\uc815\\ub82c|sort/i.test(l)&&bs[i].offsetParent)return bs[i]}return null};",
+            "S.ensureComments=function(){var p=S.commentsPanel();var open=!!p&&p.getAttribute('visibility')==='ENGAGEMENT_PANEL_VISIBILITY_EXPANDED';S.commentsOpen=open;if(open||!S.cfg.comments)return;var now=Date.now();if(S.commentsId!==S.id){S.commentsId=S.id;S.commentsTries=0}if(S.commentsTries>=4||now-S.commentsAt<1500)return;var b=S.commentsButton();if(b){S.commentsAt=now;S.commentsTries++;b.click()}};",
             "S.currentId=function(){var m=location.pathname.match(/\\/shorts\\/([\\w-]+)/);return m?m[1]:null};",
             "S.activeVideo=function(){var vs=document.querySelectorAll('video'),v=null,i;for(i=0;i<vs.length;i++){var x=vs[i];if(!x.paused&&x.readyState>2&&x.clientWidth>0){v=x;break}}if(!v){for(i=0;i<vs.length;i++){if(vs[i].clientWidth>0&&vs[i].duration>0){v=vs[i];break}}}return v};",
             "S.clickNext=function(){var b=document.querySelector('#navigation-button-down button')||document.querySelector('button[aria-label=\"Next video\"]')||document.querySelector('button[aria-label=\"\\ub2e4\\uc74c \\ub3d9\\uc601\\uc0c1\"]');if(b){b.click();return true}return false};",
@@ -23,6 +26,7 @@ enum ShortsAgent {
             "var id=S.currentId();if(!id)return;",
             "if(id!==S.id){S.id=id;S.plays=0;S.lastT=0;S.advancedId=null;if(S.pendingId&&S.pendingId!==id){S.advanced++;S.pendingId=null}}",
             "else if(S.pendingId===id&&Date.now()-S.pendingSince>1500){if(S.step<3){S.pendingSince=Date.now();S.tryStep('retry')}else{var vv=S.activeVideo();if(vv){vv.loop=true;if(vv.ended)vv.play()}S.pendingId=null;S.advancedId=null;S.method='stuck'}}",
+            "S.ensureComments();",
             "var v=S.activeVideo();if(!v||!(v.duration>0))return;",
             "var t=v.currentTime,d=v.duration;S.t=t;S.d=d;",
             "var last=S.plays+1>=S.cfg.repeat;",
@@ -33,15 +37,15 @@ enum ShortsAgent {
             "};",
             "document.addEventListener('timeupdate',S.tick,true);document.addEventListener('ended',S.tick,true);S.timer=setInterval(S.tick,500)",
             "}",
-            "S.cfg.repeat=cfg.repeat;S.cfg.enabled=cfg.enabled;S.lastPing=Date.now();",
+            "S.cfg.repeat=cfg.repeat;S.cfg.enabled=cfg.enabled;S.cfg.comments=!!cfg.comments;S.lastPing=Date.now();",
             "if(!cfg.enabled){var v2=S.activeVideo();if(v2&&!v2.loop)v2.loop=true}",
-            "return JSON.stringify({id:S.id,plays:S.plays,t:Math.round(S.t*10)/10,d:Math.round(S.d*10)/10,advanced:S.advanced,title:document.title,method:S.method,repeat:S.cfg.repeat});",
+            "return JSON.stringify({id:S.id,plays:S.plays,t:Math.round(S.t*10)/10,d:Math.round(S.d*10)/10,advanced:S.advanced,title:document.title,method:S.method,repeat:S.cfg.repeat,comments:S.commentsOpen});",
             "})",
         ]
         return lines.joined(separator: " ")
     }()
 
-    static func call(repeat count: Int, enabled: Bool) -> String {
-        "\(source)({repeat:\(max(1, count)),enabled:\(enabled ? "true" : "false")})"
+    static func call(repeat count: Int, enabled: Bool, comments: Bool = false) -> String {
+        "\(source)({repeat:\(max(1, count)),enabled:\(enabled ? "true" : "false"),comments:\(comments ? "true" : "false")})"
     }
 }

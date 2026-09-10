@@ -1,6 +1,32 @@
 import AppKit
 import Observation
 
+/// A site the auto-scroller knows how to drive. Instagram Reels is the planned next entry.
+enum ScrollPlatform: String, CaseIterable, Identifiable {
+    case youtubeShorts
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .youtubeShorts: return "YouTube 쇼츠"
+        }
+    }
+
+    /// Substring of the tab URL that marks a matching tab.
+    var urlNeedle: String {
+        switch self {
+        case .youtubeShorts: return "youtube.com/shorts"
+        }
+    }
+
+    func agentCall(repeat count: Int, enabled: Bool, comments: Bool) -> String {
+        switch self {
+        case .youtubeShorts: return ShortsAgent.call(repeat: count, enabled: enabled, comments: comments)
+        }
+    }
+}
+
 /// Browsers that can run JavaScript in a tab through Apple Events (Firefox can't).
 enum ShortsBrowser: String, CaseIterable, Identifiable {
     case chrome = "com.google.Chrome"
@@ -38,8 +64,8 @@ enum ShortsBrowser: String, CaseIterable, Identifiable {
         !NSRunningApplication.runningApplications(withBundleIdentifier: rawValue).isEmpty
     }
 
-    /// AppleScript that runs `js` in every Shorts tab and returns one line per tab.
-    func script(js: String) -> String {
+    /// AppleScript that runs `js` in every tab whose URL contains `urlNeedle` and returns one line per tab.
+    func script(js: String, urlNeedle: String = "youtube.com/shorts") -> String {
         let escaped = js.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let exec = isSafari ? "do JavaScript \"\(escaped)\" in t" : "execute t javascript \"\(escaped)\""
         return """
@@ -47,7 +73,7 @@ enum ShortsBrowser: String, CaseIterable, Identifiable {
             set out to ""
             repeat with w in windows
                 repeat with t in tabs of w
-                    if (URL of t) contains "youtube.com/shorts" then
+                    if (URL of t) contains "\(urlNeedle)" then
                         try
                             set r to \(exec)
                             set out to out & r & linefeed
@@ -66,6 +92,8 @@ enum ShortsBrowser: String, CaseIterable, Identifiable {
 struct ShortsTabStatus: Identifiable, Equatable {
     let id: String            // browser + index
     let browser: ShortsBrowser
+    var platform: ScrollPlatform = .youtubeShorts
+    var commentsOpen: Bool = false
     var title: String
     var shortsID: String
     var plays: Int
@@ -82,6 +110,7 @@ struct ShortsTabStatus: Identifiable, Equatable {
 final class AutoScroller {
     private(set) var isEnabled: Bool
     private(set) var repeatCount: Int
+    private(set) var autoOpenComments: Bool
     private(set) var tabs: [ShortsTabStatus] = []
     private(set) var runningBrowsers: [ShortsBrowser] = []
     private(set) var problem: String?
@@ -95,13 +124,22 @@ final class AutoScroller {
 
     private static let enabledKey = "autoScrollEnabled"
     private static let repeatKey = "autoScrollRepeat"
+    private static let commentsKey = "autoScrollComments"
     static let repeatRange = 1...10
 
     init() {
         isEnabled = UserDefaults.standard.bool(forKey: Self.enabledKey)
         let stored = UserDefaults.standard.integer(forKey: Self.repeatKey)
         repeatCount = Self.repeatRange.contains(stored) ? stored : 1
+        autoOpenComments = UserDefaults.standard.bool(forKey: Self.commentsKey)
         refreshBrowsers()
+    }
+
+    func setAutoOpenComments(_ on: Bool) {
+        guard on != autoOpenComments else { return }
+        autoOpenComments = on
+        UserDefaults.standard.set(on, forKey: Self.commentsKey)
+        if isEnabled { poll(enabled: true, synchronous: false) }
     }
 
     func start() {
@@ -156,7 +194,8 @@ final class AutoScroller {
     private func poll(enabled: Bool, synchronous: Bool) {
         refreshBrowsers()
         guard inFlight == 0 || synchronous else { return }
-        let js = ShortsAgent.call(repeat: repeatCount, enabled: enabled)
+        let platform = ScrollPlatform.youtubeShorts
+        let js = platform.agentCall(repeat: repeatCount, enabled: enabled, comments: autoOpenComments)
         if runningBrowsers.isEmpty {
             tabs = []
             problem = enabled ? "지원하는 브라우저가 실행 중이 아니에요 (Chrome · Brave · Edge · Vivaldi · Arc · Safari)" : nil
@@ -165,7 +204,7 @@ final class AutoScroller {
         }
         for browser in runningBrowsers {
             inFlight += 1
-            Self.runOSAScript(browser.script(js: js), synchronous: synchronous) { [weak self] output, error in
+            Self.runOSAScript(browser.script(js: js, urlNeedle: platform.urlNeedle), synchronous: synchronous) { [weak self] output, error in
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.inFlight = max(0, self.inFlight - 1)
@@ -212,7 +251,8 @@ final class AutoScroller {
             advancedByTab[key] = advanced
             var title = (json["title"] as? String) ?? ""
             if title.hasSuffix(" - YouTube") { title = String(title.dropLast(10)) }
-            found.append(ShortsTabStatus(id: key, browser: browser, title: title,
+            found.append(ShortsTabStatus(id: key, browser: browser, platform: .youtubeShorts,
+                                         commentsOpen: json["comments"] as? Bool ?? false, title: title,
                                          shortsID: json["id"] as? String ?? "",
                                          plays: json["plays"] as? Int ?? 0,
                                          time: json["t"] as? Double ?? 0,

@@ -10,6 +10,7 @@ struct AutoScrollView: View {
                 header
                 toggleCard
                 repeatCard
+                commentsCard
                 if let hint = scroller.setupHint { noticeCard(icon: "wrench.and.screwdriver", color: .orange, title: "브라우저 설정이 한 번 필요해요", text: hint) }
                 if let problem = scroller.problem { noticeCard(icon: "exclamationmark.triangle", color: .red, title: "지금은 동작하지 않아요", text: problem) }
                 statusCard
@@ -61,6 +62,18 @@ struct AutoScrollView: View {
                     .labelsHidden()
                     .controlSize(.small)
             }
+        }
+    }
+
+    private var commentsCard: some View {
+        ActionRow(icon: "text.bubble", title: "쇼츠 열면 댓글도 항상 열기",
+                  subtitle: scroller.autoOpenComments
+                    ? "새 쇼츠로 넘어갈 때마다 댓글 패널이 닫혀 있으면 자동으로 열어요."
+                    : "켜면 쇼츠마다 댓글 패널을 자동으로 펼쳐요.") {
+            Toggle("", isOn: Binding(get: { scroller.autoOpenComments }, set: { scroller.setAutoOpenComments($0) }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
     }
 
@@ -134,6 +147,12 @@ struct AutoScrollView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 8)
+                if scroller.autoOpenComments {
+                    Image(systemName: tab.commentsOpen ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 10))
+                        .foregroundStyle(tab.commentsOpen ? Theme.accent : Color.secondary)
+                        .help(tab.commentsOpen ? "댓글 열림" : "댓글 여는 중")
+                }
                 Text("\(min(tab.plays + 1, scroller.repeatCount))/\(scroller.repeatCount)번째")
                     .font(.system(size: 11, design: .rounded))
                     .monospacedDigit()
