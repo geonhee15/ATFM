@@ -349,12 +349,14 @@ private struct PeriodicTableView: View {
         .card()
     }
 
-    /// 18 columns × 9.35 rows of cells (7 periods, a gap, lanthanides, actinides) with 2 pt gaps and 8 pt padding.
-    private static let gridAspect: CGFloat = 302.0 / 162.9   // (18·14 + 17·2 + 16) / (9.35·14 + 8·2 + 16)
+    /// 18 columns + a period-label column (0.8 cell) × 9.35 rows + a group-header row (0.8 cell),
+    /// 2 pt gaps, 8 pt padding.
+    private static let labelUnits: CGFloat = 0.8
+    private static let gridAspect: CGFloat = 315.2 / 176.1   // (18.8·14 + 18·2 + 16) / (10.15·14 + 9·2 + 16)
 
     private static func cellSize(for size: CGSize) -> CGFloat {
-        let byWidth = (size.width - 16 - 2 * 17) / 18
-        let byHeight = (size.height - 16 - 2 * 8) / 9.35
+        let byWidth = (size.width - 16 - 2 * 18) / (18 + labelUnits)
+        let byHeight = (size.height - 16 - 2 * 9) / (9.35 + labelUnits)
         return floor(min(byWidth, byHeight))
     }
 
@@ -363,9 +365,11 @@ private struct PeriodicTableView: View {
     private var gridCard: some View {
         GeometryReader { geo in
             let cell = Self.cellSize(for: geo.size)
+            let labelWidth = floor(cell * Self.labelUnits)
             VStack(spacing: 2) {
+                PeriodicHeaderRow(cell: cell, labelWidth: labelWidth)
                 ForEach(Self.gridRows, id: \.self) { row in
-                    PeriodicRow(row: row, cell: cell, hub: hub)
+                    PeriodicRow(row: row, cell: cell, labelWidth: labelWidth, hub: hub)
                 }
             }
             .padding(8)
@@ -388,22 +392,64 @@ private struct PeriodicTableView: View {
     }
 }
 
+/// Group numbers 1–18 above the columns.
+private struct PeriodicHeaderRow: View {
+    let cell: CGFloat
+    let labelWidth: CGFloat
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text("족")
+                .font(.system(size: max(5, cell * 0.32), weight: .medium))
+                .foregroundStyle(.tertiary)
+                .frame(width: labelWidth, height: labelWidth)
+            ForEach(1...18, id: \.self) { group in
+                Text("\(group)")
+                    .font(.system(size: max(5, cell * 0.36), weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: cell, height: labelWidth)
+            }
+        }
+    }
+}
+
 private struct PeriodicRow: View {
     let row: Int
     let cell: CGFloat
+    let labelWidth: CGFloat
     let hub: DictionaryHub
 
     private var elements: [ChemicalElement?] {
         (1...18).map { PeriodicTable.element(atX: $0, y: row) }
     }
 
+    /// Period number, or the lanthanide/actinide markers for the two detached rows.
+    private var label: String {
+        switch row {
+        case 9: return "*"
+        case 10: return "**"
+        default: return "\(row)"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if row == 9 { Color.clear.frame(height: cell * 0.35) }
             HStack(spacing: 2) {
-                ForEach(Array(elements.enumerated()), id: \.offset) { _, element in
+                Text(label)
+                    .font(.system(size: max(5, cell * 0.36), weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: labelWidth, height: cell)
+                ForEach(Array(elements.enumerated()), id: \.offset) { index, element in
                     if let element {
                         cellView(element)
+                    } else if index == 2, row == 6 || row == 7 {
+                        // Group 3 of periods 6/7: the detached lanthanide / actinide series live below.
+                        Text(row == 6 ? "*" : "**")
+                            .font(.system(size: max(5, cell * 0.36)))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: cell, height: cell)
+                            .help(row == 6 ? "57–71 란타넘족 (아래 * 줄)" : "89–103 악티늄족 (아래 ** 줄)")
                     } else {
                         Color.clear.frame(width: cell, height: cell)
                     }
