@@ -1,4 +1,5 @@
 import AppKit
+import Translation
 
 /// `ATFM --probe` prints what the system/network samplers can see on this Mac. Debug aid only.
 enum Probe {
@@ -149,6 +150,34 @@ enum Probe {
                 default: print("download probe: still \(fresh.phase) at timeout")
                 }
                 UserDefaults.standard.removeObject(forKey: "downloadDirectory")
+            }
+        }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_TRANSLATE"] == "1" {
+            if #available(macOS 15.0, *) {
+                let semaphore = DispatchSemaphore(value: 0)
+                Task.detached {
+                    let availability = LanguageAvailability()
+                    let supported = await availability.supportedLanguages
+                    print("translate probe: \(supported.count) supported languages: \(supported.prefix(12).map { $0.minimalIdentifier }.joined(separator: " "))…")
+                    for (from, to) in [("en", "ko"), ("ko", "en"), ("ja", "ko")] {
+                        let status = await availability.status(from: Locale.Language(identifier: from), to: Locale.Language(identifier: to))
+                        print("translate probe: \(from)→\(to) status=\(status)")
+                    }
+                    if let auto = try? await availability.status(for: "The quick brown fox", to: Locale.Language(identifier: "ko")) {
+                        print("translate probe: auto(en text)→ko status=\(auto)")
+                    }
+                    semaphore.signal()
+                }
+                _ = semaphore.wait(timeout: .now() + 20)
+            } else {
+                print("translate probe: macOS 15+ only")
+            }
+        }
+        if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_CALC"] {   // "expr;expr;…"
+            for expr in spec.split(separator: ";").map(String.init) {
+                var engine = CalcEngine(degrees: true, ans: 42)
+                do { print("calc probe: \(expr) = \(CalcEngine.format(try engine.evaluate(expr)))") }
+                catch { print("calc probe: \(expr) → error: \(error.localizedDescription)") }
             }
         }
         if let word = ProcessInfo.processInfo.environment["ATFM_PROBE_DICT"] {

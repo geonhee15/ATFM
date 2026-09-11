@@ -32,6 +32,11 @@
     <td align="center"><img src="docs/screenshots/dictionary-korean.png" width="230"><br><b>사전 · 국어/영어</b><br><sub>macOS 내장 뉴에이스 사전 · 동음이의어</sub></td>
     <td align="center"><img src="docs/screenshots/dates.png" width="230"><br><b>날짜</b><br><sub>시계 · 전용 달력 · D-days</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/calculator.png" width="230"><br><b>계산기</b><br><sub>식 입력 · 함수 · 기록</sub></td>
+    <td align="center"><img src="docs/screenshots/translate.png" width="230"><br><b>번역</b><br><sub>Apple 번역 · Gemini</sub></td>
+    <td align="center"><img src="docs/screenshots/timers.png" width="230"><br><b>타이머</b><br><sub>스탑워치 · 타이머 · 메뉴 막대 표시</sub></td>
+  </tr>
 </table>
 
 <p>
@@ -104,6 +109,14 @@
     항목마다 크게 보여줄 숫자를 고를 수 있음: **기념일까지 D-**(빨강) 또는 **처음부터 D+**(파랑, 시작일을 1일로 세는 옵션).
     나머지 정보는 작은 글씨로. 다가오는 순으로 정렬
   - 일정·D-day 행과 달력 날짜에서 **우클릭**: 수정 · D-day/캘린더 표시 토글 · 크게 표시 전환 · 반복 · 색 · 복제 · 삭제, 날짜에서 바로 일정 추가
+- **계산기** 탭: 식을 그대로 입력하는 계산기. `12*3+4^2`, `sqrt(2)`, `sin(30)`(도/라디안 전환), `5!`, `15%`, `2π`, `3(4+1)`,
+  `7 mod 3`, `1,234+1`, `log(100)`, `max(1,5,3)`, `ans`(직전 결과). 입력하는 대로 결과가 보이고 Enter로 기록(20개, 클릭하면 재사용), 키패드, 결과 복사
+- **번역** 탭: macOS 내장 **Apple 번역**(오프라인 · macOS 15+, 언어 파일은 시스템 설정 › 일반 › 언어 및 지역 › 번역 언어에서 내려받아야 하며
+  없으면 안내 + "설정 열기")과 **Gemini**(간편 AI의 키 사용) 중 선택. Gemini 키가 있으면 처음엔 Gemini가 기본.
+  자동 감지 또는 20개 언어 지정, 언어 바꾸기(결과를 다시 원문으로), 붙여넣기, 복사, ⌘↩ 번역
+- **타이머** 탭: **스탑워치**(0.01초, 랩 기록·구간 시간, 스페이스로 시작/정지)와 **타이머**(1분~1시간 프리셋 + 시/분/초 조절, 일시정지·계속·+1분).
+  타이머가 돌면 메뉴 막대 아이콘 옆에 남은 시간이 표시되고, 끝나면 소리 2번 + 화면 위쪽 팝업 + macOS 알림(첫 실행 때 알림 권한 요청).
+  말풍선을 닫아도 계속 돕니다
 - **사전** 탭: 영어 · 국어 · 주기율표
   - **영어**: macOS에 내장된 뉴에이스 영한·한영사전(오프라인)으로 영어 단어 → 우리말 뜻·발음·예문, 한국어 → 영어 표현.
     Oxford 영영사전이 켜져 있으면 영영 풀이도 함께, 없으면 dictionaryapi.dev(무료)로 영영 풀이를 온라인으로 가져옴
@@ -179,6 +192,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_DEBUG_AUDIO_TAP=1` | 실행 직후 비주얼라이저 오디오 탭을 6초 동안 돌리고 `Application Support/ATFM/audio-tap.txt`에 대역 레벨을 기록합니다 |
+| `ATFM_DEBUG_CALC=식` · `ATFM_DEBUG_TRANSLATE=글` (+`_RUN=1`) · `ATFM_DEBUG_TIMER=stopwatch\|timer` | 계산기 입력 채우기 · 번역 원문 채우기(바로 번역) · 스탑워치/타이머 샘플 실행 (스냅샷용); `ATFM_PROBE_CALC="식;식" ATFM --probe`는 계산 결과 출력 |
 | `ATFM_DEBUG_DATES_EDITOR=1` | 날짜 탭 위에 일정 편집 폼을 인라인으로 띄웁니다 (스냅샷용) |
 | `ATFM_DEBUG_DICT="english\|korean\|periodic|검색어"` | 사전 탭을 해당 섹션·검색어로 열어 둡니다 (스냅샷용); `ATFM_PROBE_DICT=단어 ATFM --probe`는 사전 조회를 출력 |
 | `ATFM_DEBUG_CLEANUP_SCAN=1` | 빠른 동작 탭의 앱 정리 검사를 실행 직후 자동으로 돌립니다 (스냅샷용) |
@@ -215,6 +229,9 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
+├── Calculator/  계산기 (CalcEngine 파서·평가기, 기록)
+├── Translate/   번역 (Apple Translation 세션 호스트, Gemini 단발 호출)
+├── Timers/      타이머 (스탑워치·카운트다운, 메뉴 막대 표시, 알림)
 ├── Dates/       날짜 (DateStore: 일정·D-day 모델, 반복 계산, dates.json)
 ├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)

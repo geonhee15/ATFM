@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import SwiftUI
 
 @MainActor
@@ -25,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let screenTools = ScreenTools()
     private let autoScroller = AutoScroller()
     private let dictionary = DictionaryHub()
+    private let calculator = CalculatorModel()
+    private let translator = TranslatorModel()
+    private let timers = TimerCenter()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -89,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, dictionary: dictionary,
+                            calculator: calculator, translator: translator, timers: timers,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
                             quit: { NSApp.terminate(nil) })
@@ -106,6 +111,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let env = ProcessInfo.processInfo.environment
         screenTools.willStartTool = { [weak bubble] in bubble?.hide() }
+        timers.onFinished = { [weak self] message in
+            self?.screenTools.hud.show(.message(message, symbol: "timer"), duration: 3)
+        }
+        UNUserNotificationCenter.current().delegate = self
+        observeMenuBarText()
         screenTools.hotkeys.handlers = [
             .captureText: { [weak self] in self?.screenTools.captureText() },
             .pickColor: { [weak self] in self?.screenTools.pickColor() },
@@ -179,6 +189,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if let expr = env["ATFM_DEBUG_CALC"] { calculator.input = expr }
+        if let text = env["ATFM_DEBUG_TRANSLATE"] {
+            translator.sourceText = text
+            if env["ATFM_DEBUG_TRANSLATE_RUN"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { MainActor.assumeIsolated { self.translator.translate() } }
+            }
+        }
+        if let mode = env["ATFM_DEBUG_TIMER"] {     // "stopwatch" or "timer": start a sample run for snapshots
+            UserDefaults.standard.set(mode, forKey: "timersSection")
+            if mode == "stopwatch" {
+                timers.stopwatchToggle()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { MainActor.assumeIsolated { self.timers.stopwatchLap() } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { MainActor.assumeIsolated { self.timers.stopwatchLap() } }
+            } else {
+                timers.setDuration(25 * 60)
+                timers.startTimer()
+            }
+        }
         if env["ATFM_DEBUG_CLEANUP_SCAN"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { self.cleaner?.scan() } }
         }
@@ -249,6 +277,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Countdown next to the menu bar icon while a timer runs.
+    private func observeMenuBarText() {
+        withObservationTracking {
+            _ = timers.menuBarText
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.applyMenuBarText()
+                self?.observeMenuBarText()
+            }
+        }
+        applyMenuBarText()
+    }
+
+    private func applyMenuBarText() {
+        guard let statusItem, let button = statusItem.button else { return }
+        if let text = timers.menuBarText {
+            button.attributedTitle = NSAttributedString(string: " " + text, attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .baselineOffset: 0,
+            ])
+            button.imagePosition = .imageLeading
+            statusItem.length = NSStatusItem.variableLength
+        } else {
+            button.attributedTitle = NSAttributedString(string: "")
+            button.imagePosition = .imageOnly
+            statusItem.length = NSStatusItem.squareLength
+        }
+    }
+
     /// Appearance + theme tint for every floating surface.
     private func applyLook() {
         let theme = ThemeManager.shared.current
@@ -303,5 +360,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+}
+
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 }

@@ -59,6 +59,9 @@ for tab in checklist notes dates awake system network actions tools autoscroll c
   shot "$tab" "$d"; sleep $((d + 3))
 done
 SHOT_NAME=dictionary shot dictionary 4 ATFM_DEBUG_DICT="periodic|Fe"; sleep 7
+SHOT_NAME=calculator shot calculator 3 ATFM_DEBUG_CALC="12*3+4^2"; sleep 6
+SHOT_NAME=translate shot translate 12 ATFM_DEBUG_TRANSLATE="The quick brown fox jumps over the lazy dog. This menu bar app collects the little things macOS forgot." ATFM_DEBUG_TRANSLATE_RUN=1; sleep 15   # uses the stored engine (Gemini spends one request)
+SHOT_NAME=timers shot timers 3 ATFM_DEBUG_TIMER=timer; sleep 6
 SHOT_NAME=dictionary-korean shot dictionary 4 ATFM_DEBUG_DICT="korean|사과"; sleep 7
 unset SHOT_NAME
 # player + floating mini player with a made-up track

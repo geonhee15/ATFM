@@ -6,6 +6,9 @@ enum AppTab: String, CaseIterable, Identifiable {
     case notes
     case dates
     case dictionary
+    case calculator
+    case translate
+    case timers
     case awake
     case system
     case network
@@ -26,6 +29,9 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .notes: return "note.text"
         case .dates: return "calendar"
         case .dictionary: return "character.book.closed"
+        case .calculator: return "plus.forwardslash.minus"
+        case .translate: return "translate"
+        case .timers: return "timer"
         case .awake: return "moon.zzz"
         case .system: return "cpu"
         case .network: return "network"
@@ -46,6 +52,9 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .notes: return "미니 메모"
         case .dates: return "날짜"
         case .dictionary: return "사전"
+        case .calculator: return "계산기"
+        case .translate: return "번역"
+        case .timers: return "타이머"
         case .awake: return "절전 방지"
         case .system: return "시스템"
         case .network: return "네트워크"
@@ -72,6 +81,9 @@ struct RootView: View {
     var notes: QuickNotesStore
     var dates: DateStore
     var dictionary: DictionaryHub
+    var calculator: CalculatorModel
+    var translator: TranslatorModel
+    var timers: TimerCenter
     var keepAwake: KeepAwake
     var gemini: GeminiChat
     var converter: FileConverter
@@ -109,6 +121,12 @@ struct RootView: View {
                     DatesView(store: dates)
                 case .dictionary:
                     DictionaryView(hub: dictionary)
+                case .calculator:
+                    CalculatorView(calc: calculator)
+                case .translate:
+                    TranslatorView(model: translator)
+                case .timers:
+                    TimersView(timers: timers)
                 case .awake:
                     KeepAwakeView(awake: keepAwake)
                 case .system:
