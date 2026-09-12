@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let translator = TranslatorModel()
     private let timers = TimerCenter()
     private let externalCalendar = ExternalCalendarSource()
+    private let soundPanel = SoundPanel()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -65,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.systemMonitor = systemMonitor
         appState.networkMonitor = networkMonitor
         appState.quickActions = quickActions
+        appState.soundPanel = soundPanel
         let cleaner = AppCleaner(resolver: identityResolver, network: networkMonitor)
         cleaner.restoreMonitors = { [weak self] in self?.appState.updateMonitors() }
         cleaner.playingBundleID = { [weak self] in
@@ -99,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
-                            nowPlaying: nowPlaying, miniPlayer: miniPlayer,
+                            nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
         let bubble = BubblePanelController(
@@ -361,6 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         screenTools.hotkeys.unregisterAll()
         autoScroller.stop()
         notes?.flush()
+        soundPanel.stopAll()
         dates?.flush()
         nowPlaying.stop()
     }

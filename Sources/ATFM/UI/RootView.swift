@@ -17,6 +17,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case autoscroll
     case convert
     case player
+    case sound
     case ai
     case settings
 
@@ -40,6 +41,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .autoscroll: return "play.square.stack"
         case .convert: return "arrow.triangle.2.circlepath"
         case .player: return "music.note"
+        case .sound: return "speaker.wave.2"
         case .ai: return "bubble.left.and.text.bubble.right"
         case .settings: return "gearshape"
         }
@@ -63,6 +65,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .autoscroll: return "자동 스크롤"
         case .convert: return "파일 변환"
         case .player: return "미니 플레이어"
+        case .sound: return "사운드"
         case .ai: return "간편 AI"
         case .settings: return "설정"
         }
@@ -94,6 +97,7 @@ struct RootView: View {
     var autoScroller: AutoScroller
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
+    var sound: SoundPanel
     var quit: () -> Void
 
     private var tab: Binding<AppTab> {
@@ -145,6 +149,8 @@ struct RootView: View {
                     ConvertView(converter: converter, downloader: downloader)
                 case .player:
                     NowPlayingTabView(monitor: nowPlaying, controller: miniPlayer)
+                case .sound:
+                    SoundView(panel: sound, master: miniPlayer.systemVolume)
                 case .ai:
                     GeminiChatView(chat: gemini)
                 case .settings:

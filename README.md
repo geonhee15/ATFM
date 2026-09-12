@@ -143,6 +143,12 @@
     (버튼 → 컨테이너 스크롤 → 키 입력 순 폴백). 스크립트는 ATFM이 15초 안에 다시 호출하지 않으면 스스로 멈춤
   - 지원: Chrome · Brave · Edge · Vivaldi · Arc · Safari (Firefox는 Apple 이벤트 JavaScript가 없어 불가).
     처음 켤 때 브라우저의 **보기 › 개발자 › Apple 이벤트에서 JavaScript 허용**을 켜야 하고, macOS 자동화 권한을 한 번 허용해야 함
+- **사운드** 탭
+  - **전체 볼륨**과 **좌우 출력**: 출력 장치가 채널별 볼륨을 지원하면 채널 1·2를 직접, 아니면(맥북 스피커 등) 스테레오 팬 + 메인 볼륨으로
+    환산해 왼쪽/오른쪽을 각각 0~100%로 조절. "가운데로"로 복귀
+  - **앱별 볼륨**(macOS 14.2+): 지금 소리를 내는 앱마다 0~100% 슬라이더. 낮추면 그 앱의 프로세스들을 Core Audio 프로세스 탭으로
+    가로채(원래 출력은 음소거) 원하는 크기로 다시 내보냄. 100%로 돌리면 탭을 없애 원래 경로로 복귀. Chrome처럼 헬퍼 프로세스가 소리를 내는
+    앱도 하나로 묶고, 앱을 다시 켜도 기억(`appVolumes`). 시스템 오디오 녹음 권한 사용
 - **파일 변환 · 다운로드** 탭
   - **링크 다운로드**: YouTube 등 링크를 붙여넣고 화질(최고 · H.264 호환 최고 · 1080p · 720p · MP3만)을 골라 저장.
     Homebrew `yt-dlp` + ffmpeg로 최고 영상·오디오 스트림을 받아 MP4로 합칩니다. 진행률·속도·남은 시간, 중단, 완료 후
@@ -206,6 +212,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_DEBUG_AUDIO_TAP=1` | 실행 직후 비주얼라이저 오디오 탭을 6초 동안 돌리고 `Application Support/ATFM/audio-tap.txt`에 대역 레벨을 기록합니다 |
+| `ATFM_PROBE_SOUND=list\|route ATFM --probe` | 오디오 프로세스·출력 장치·팬 지원을 출력하고, route면 재생 중인 앱을 3초간 100% 탭 경로로 통과시켜 봅니다 |
 | `ATFM_DEBUG_PLAYLIST_SAMPLE=1` (+`ATFM_DEBUG_NOWPLAYING_SAMPLE=1`) | 미니 플레이어에 가짜 플레이리스트 분석 결과를 펼쳐 보여줍니다; `ATFM_PROBE_PLAYLIST=<영상 ID\|URL>[\|nolyrics] ATFM --probe`는 실제 분석 파이프라인 실행 |
 | `ATFM_DEBUG_DATES_SELECT=2026-09-25` | 날짜 탭에서 해당 날짜를 선택한 채 시작합니다 (스냅샷용) |
 | `ATFM_DEBUG_EXTCAL=1` | 날짜 탭의 "학교 스케줄 보이기"를 켠 상태로 시작합니다 (캘린더 권한 필요) |
@@ -240,6 +247,7 @@ Sources/ATFM
 ├── Checklist/   체크리스트 저장소 (JSON)
 ├── Awake/       절전 방지 (IOPMAssertion, pmset disablesleep)
 ├── AI/          Gemini REST 클라이언트(SSE 스트리밍) + 대화 저장
+├── Sound/       사운드 (프로세스 오디오 탭 앱별 볼륨, 좌우 채널/팬)
 ├── Convert/     파일 변환 (ImageIO · ffmpeg · AVFoundation 엔진, 변환 큐) + yt-dlp 다운로더
 ├── NowPlaying/  Now Playing 브리지 클라이언트, 미니 플레이어 패널, LRCLIB 가사
 ├── System/      CPU·메모리·GPU·배터리·온도 프로브, 프로세스별 샘플러, 시스템 모니터

@@ -14,6 +14,7 @@ final class AppState {
     @ObservationIgnored var systemMonitor: SystemMonitor?
     @ObservationIgnored var networkMonitor: NetworkMonitor?
     @ObservationIgnored var quickActions: QuickActions?
+    @ObservationIgnored var soundPanel: SoundPanel?
     @ObservationIgnored var applyAppearance: ((AppearanceMode) -> Void)?
     @ObservationIgnored var resizeBubble: ((BubbleResizeDelta) -> Void)?
     @ObservationIgnored var resetBubbleSize: (() -> Void)?
@@ -45,5 +46,6 @@ final class AppState {
         systemMonitor?.setActive(isBubbleVisible && tab == .system)
         networkMonitor?.setActive(isBubbleVisible && tab == .network)
         if isBubbleVisible && tab == .actions { quickActions?.refresh() }
+        soundPanel?.setActive(isBubbleVisible && tab == .sound)
     }
 }

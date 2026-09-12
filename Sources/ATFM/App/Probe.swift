@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 import Translation
 
 /// `ATFM --probe` prints what the system/network samplers can see on this Mac. Debug aid only.
@@ -196,6 +197,35 @@ enum Probe {
                     }
                 case .failed(let message): print("playlist probe: FAILED \(message)")
                 default: print("playlist probe: timed out in state \(analyzer.state)")
+                }
+            }
+        }
+        if let mode = ProcessInfo.processInfo.environment["ATFM_PROBE_SOUND"] {   // "list" or "route" (passes the first playing app through at 100% for 3 s)
+            MainActor.assumeIsolated {
+                let output = AudioProcesses.defaultOutputDevice()
+                print("sound probe: output=\(output?.name ?? "?") uid=\(output?.uid ?? "?")")
+                let processes = AudioProcesses.list()
+                let running = Dictionary(uniqueKeysWithValues: NSWorkspace.shared.runningApplications.map { ($0.processIdentifier, $0.localizedName ?? "?") })
+                for p in processes where p.isRunningOutput || p.bundleID != nil {
+                    print("sound probe: pid=\(p.pid) obj=\(p.objectID) \(running[p.pid] ?? "-") [\(p.bundleID ?? "-")] playing=\(p.isRunningOutput)")
+                }
+                if let output {
+                    var pan = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStereoPan, mScope: kAudioObjectPropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+                    var value: Float32 = -1; var size = UInt32(4)
+                    let has = AudioObjectHasProperty(output.id, &pan)
+                    if has { _ = AudioObjectGetPropertyData(output.id, &pan, 0, nil, &size, &value) }
+                    print("sound probe: stereo pan available=\(has) value=\(value)")
+                }
+                let panel = SoundPanel()
+                print("sound probe: channels available=\(panel.channelsAvailable) left=\(panel.left) right=\(panel.right)")
+                if mode == "route", #available(macOS 14.2, *), let output, let target = processes.first(where: { $0.isRunningOutput && $0.bundleID != Bundle.main.bundleIdentifier }) {
+                    do {
+                        let route = try ProcessTapRoute(key: "probe", objectIDs: [target.objectID], outputUID: output.uid, gain: 1.0)
+                        print("sound probe: route created for pid \(target.pid) tap=\(route.tapID) aggregate=\(route.aggregateID); passing audio through for 3 s…")
+                        RunLoop.main.run(until: Date().addingTimeInterval(3))
+                        route.stop()
+                        print("sound probe: route stopped")
+                    } catch { print("sound probe: route FAILED \(error.localizedDescription)") }
                 }
             }
         }
