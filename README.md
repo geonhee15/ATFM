@@ -133,8 +133,10 @@
     이름(한글·옛 이름·영어)·기호·번호로 검색, 원소를 누르면
     원자량 · 주기/족/블록 · 실온 상태 · 전자 배치 · 전기음성도 · 밀도 · 녹는점/끓는점 · 발견 + 위키백과 링크.
     데이터: [Bowserinator/Periodic-Table-JSON](https://github.com/Bowserinator/Periodic-Table-JSON) (CC BY-SA 3.0) + 대한화학회 표기 한글 이름
-- **자동 스크롤** 탭 (YouTube 쇼츠)
-  - 브라우저의 쇼츠 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작
+- **자동 스크롤** 탭 (YouTube 쇼츠 · Instagram 릴스)
+  - 브라우저의 쇼츠/릴스 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작. 플랫폼별 켜기/끄기
+  - **Instagram 릴스**: 마크업이 난독화돼 있어 구조로 찾음 — 화면 중앙에 가장 가까운 재생 중 `<video>`, 그 스크롤 컨테이너, aria-label(Next/다음) 버튼.
+    넘기기는 버튼 → 다음 영상 위치로 스크롤 → ArrowDown 순으로 시도하고 상태 카드에 마지막 방식(button/scroll/key)을 표시
   - **반복 횟수**: 1이면 한 번 보고 넘기고, N이면 같은 쇼츠를 N번 본 뒤 넘김. 손으로 위로 올려 다시 봐도 상관없이, 그 편이 끝나면 또 넘김
   - **쇼츠 열면 댓글도 항상 열기**: 새 쇼츠로 넘어갈 때 댓글 패널이 닫혀 있으면 "댓글 N개 보기" 버튼을 눌러 자동으로 펼침(쇼츠당 최대 4번 시도)
   - 동작 원리: Apple 이벤트로 브라우저 탭에 작은 스크립트를 주입해 `<video>` 재생 위치를 보고 "다음 동영상" 버튼을 누름
@@ -213,7 +215,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
-| `ATFM_PROBE_AUTOSCROLL=js\|script\|safari` | 쇼츠 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
+| `ATFM_PROBE_AUTOSCROLL=js\|script\|safari\|reels\|reels-script` | 쇼츠/릴스 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
 | `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
@@ -249,7 +251,7 @@ Sources/ATFM
 ├── Dates/       날짜 (DateStore: 일정·D-day 모델, 반복 계산, dates.json · ExternalCalendar: EventKit 읽기 · HolidayStore: 공휴일 피드)
 ├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
-├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)
+├── AutoScroll/  자동 스크롤 (쇼츠·릴스 탭 폴링 osascript + 페이지 에이전트 JS ShortsAgent/ReelsAgent)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)
 └── Support/     설정 키, 앱 아이콘 캐시
 Sources/MediaRemoteBridge/Bridge.swift   perl이 로드하는 MediaRemote 브리지 (dylib로 따로 빌드)

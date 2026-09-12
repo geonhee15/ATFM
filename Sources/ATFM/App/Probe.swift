@@ -239,6 +239,8 @@ enum Probe {
             // "js" prints the page agent call; "script" prints the Chrome AppleScript (for osacompile checks).
             switch what {
             case "js": print(ShortsAgent.call(repeat: 2, enabled: true, comments: true))
+            case "reels": print(ReelsAgent.call(repeat: 2, enabled: true, comments: true))
+            case "reels-script": print(ShortsBrowser.chrome.script(js: ReelsAgent.call(repeat: 1, enabled: true, comments: false), urlNeedle: ScrollPlatform.instagramReels.urlNeedle))
             case "script": print(ShortsBrowser.chrome.script(js: ShortsAgent.call(repeat: 2, enabled: true)))
             case "safari": print(ShortsBrowser.safari.script(js: ShortsAgent.call(repeat: 1, enabled: true)))
             default: break

@@ -9,6 +9,7 @@ struct AutoScrollView: View {
             VStack(alignment: .leading, spacing: 8) {
                 header
                 toggleCard
+                platformCard
                 repeatCard
                 commentsCard
                 if let hint = scroller.setupHint { noticeCard(icon: "wrench.and.screwdriver", color: .orange, title: "브라우저 설정이 한 번 필요해요", text: hint) }
@@ -28,7 +29,7 @@ struct AutoScrollView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
-            Text("YouTube 쇼츠")
+            Text("YouTube 쇼츠 · Instagram 릴스")
                 .font(.system(size: 11, weight: .medium))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -65,11 +66,36 @@ struct AutoScrollView: View {
         }
     }
 
+    private var platformCard: some View {
+        VStack(spacing: 0) {
+            ForEach(ScrollPlatform.allCases) { platform in
+                HStack(spacing: 12) {
+                    Image(systemName: platform.symbol)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(platform.title).font(.system(size: 13, weight: .semibold))
+                        Text(platform == .youtubeShorts ? "youtube.com/shorts 탭" : "instagram.com/reels 탭 · 버튼 → 스크롤 → 키 순으로 넘겨요")
+                            .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { scroller.platforms.contains(platform) }, set: { scroller.setPlatform(platform, enabled: $0) }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                if platform != ScrollPlatform.allCases.last { Divider().padding(.leading, 54) }
+            }
+        }
+        .card()
+    }
+
     private var commentsCard: some View {
-        ActionRow(icon: "text.bubble", title: "쇼츠 열면 댓글도 항상 열기",
+        ActionRow(icon: "text.bubble", title: "열면 댓글도 항상 열기",
                   subtitle: scroller.autoOpenComments
-                    ? "새 쇼츠로 넘어갈 때마다 댓글 패널이 닫혀 있으면 자동으로 열어요."
-                    : "켜면 쇼츠마다 댓글 패널을 자동으로 펼쳐요.") {
+                    ? "새 쇼츠·릴스로 넘어갈 때마다 댓글 패널이 닫혀 있으면 자동으로 열어요."
+                    : "켜면 쇼츠·릴스마다 댓글 패널을 자동으로 펼쳐요.") {
             Toggle("", isOn: Binding(get: { scroller.autoOpenComments }, set: { scroller.setAutoOpenComments($0) }))
                 .labelsHidden()
                 .toggleStyle(.switch)
@@ -114,7 +140,7 @@ struct AutoScrollView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.tertiary)
             } else if scroller.tabs.isEmpty {
-                Text("열려 있는 쇼츠 탭을 찾는 중… youtube.com/shorts 탭이 있으면 자동으로 붙어요")
+                Text("열려 있는 쇼츠·릴스 탭을 찾는 중… youtube.com/shorts 또는 instagram.com/reels 탭이 있으면 자동으로 붙어요")
                     .font(.system(size: 12))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -142,10 +168,20 @@ struct AutoScrollView: View {
     private func tabRow(_ tab: ShortsTabStatus) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
+                Image(systemName: tab.platform.symbol)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .help(tab.platform.title)
                 Text(tab.title.isEmpty ? tab.shortsID : tab.title)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                if !tab.method.isEmpty {
+                    Text(tab.method)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .help("마지막으로 넘긴 방식")
+                }
                 Spacer(minLength: 8)
                 if scroller.autoOpenComments {
                     Image(systemName: tab.commentsOpen ? "text.bubble.fill" : "text.bubble")

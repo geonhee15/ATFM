@@ -4,12 +4,21 @@ import Observation
 /// A site the auto-scroller knows how to drive. Instagram Reels is the planned next entry.
 enum ScrollPlatform: String, CaseIterable, Identifiable {
     case youtubeShorts
+    case instagramReels
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .youtubeShorts: return "YouTube 쇼츠"
+        case .instagramReels: return "Instagram 릴스"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .youtubeShorts: return "play.rectangle.fill"
+        case .instagramReels: return "camera.aperture"
         }
     }
 
@@ -17,12 +26,14 @@ enum ScrollPlatform: String, CaseIterable, Identifiable {
     var urlNeedle: String {
         switch self {
         case .youtubeShorts: return "youtube.com/shorts"
+        case .instagramReels: return "instagram.com/reel"
         }
     }
 
     func agentCall(repeat count: Int, enabled: Bool, comments: Bool) -> String {
         switch self {
         case .youtubeShorts: return ShortsAgent.call(repeat: count, enabled: enabled, comments: comments)
+        case .instagramReels: return ReelsAgent.call(repeat: count, enabled: enabled, comments: comments)
         }
     }
 }
@@ -111,6 +122,7 @@ final class AutoScroller {
     private(set) var isEnabled: Bool
     private(set) var repeatCount: Int
     private(set) var autoOpenComments: Bool
+    private(set) var platforms: Set<ScrollPlatform>
     private(set) var tabs: [ShortsTabStatus] = []
     private(set) var runningBrowsers: [ShortsBrowser] = []
     private(set) var problem: String?
@@ -125,6 +137,7 @@ final class AutoScroller {
     private static let enabledKey = "autoScrollEnabled"
     private static let repeatKey = "autoScrollRepeat"
     private static let commentsKey = "autoScrollComments"
+    private static let platformsKey = "autoScrollPlatforms"
     static let repeatRange = 1...10
 
     init() {
@@ -132,7 +145,16 @@ final class AutoScroller {
         let stored = UserDefaults.standard.integer(forKey: Self.repeatKey)
         repeatCount = Self.repeatRange.contains(stored) ? stored : 1
         autoOpenComments = UserDefaults.standard.bool(forKey: Self.commentsKey)
+        let storedPlatforms = UserDefaults.standard.stringArray(forKey: Self.platformsKey)
+        platforms = storedPlatforms.map { Set($0.compactMap(ScrollPlatform.init(rawValue:))) } ?? Set(ScrollPlatform.allCases)
         refreshBrowsers()
+    }
+
+    func setPlatform(_ platform: ScrollPlatform, enabled: Bool) {
+        if enabled { platforms.insert(platform) } else { platforms.remove(platform) }
+        UserDefaults.standard.set(platforms.map(\.rawValue).sorted(), forKey: Self.platformsKey)
+        if !enabled { tabs.removeAll { $0.platform == platform } }
+        if isEnabled { poll(enabled: true, synchronous: false) }
     }
 
     func setAutoOpenComments(_ on: Bool) {
@@ -194,28 +216,35 @@ final class AutoScroller {
     private func poll(enabled: Bool, synchronous: Bool) {
         refreshBrowsers()
         guard inFlight == 0 || synchronous else { return }
-        let platform = ScrollPlatform.youtubeShorts
-        let js = platform.agentCall(repeat: repeatCount, enabled: enabled, comments: autoOpenComments)
         if runningBrowsers.isEmpty {
             tabs = []
             problem = enabled ? "지원하는 브라우저가 실행 중이 아니에요 (Chrome · Brave · Edge · Vivaldi · Arc · Safari)" : nil
             setupHint = nil
             return
         }
-        for browser in runningBrowsers {
-            inFlight += 1
-            Self.runOSAScript(browser.script(js: js, urlNeedle: platform.urlNeedle), synchronous: synchronous) { [weak self] output, error in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.inFlight = max(0, self.inFlight - 1)
-                    guard enabled else { return }
-                    self.handle(browser: browser, output: output, error: error)
+        let active = ScrollPlatform.allCases.filter { platforms.contains($0) }
+        if active.isEmpty {
+            tabs = []
+            problem = enabled ? "켜진 플랫폼이 없어요. 아래에서 쇼츠나 릴스를 켜 주세요." : nil
+            return
+        }
+        for platform in active {
+            let js = platform.agentCall(repeat: repeatCount, enabled: enabled, comments: autoOpenComments)
+            for browser in runningBrowsers {
+                inFlight += 1
+                Self.runOSAScript(browser.script(js: js, urlNeedle: platform.urlNeedle), synchronous: synchronous) { [weak self] output, error in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.inFlight = max(0, self.inFlight - 1)
+                        guard enabled else { return }
+                        self.handle(browser: browser, platform: platform, output: output, error: error)
+                    }
                 }
             }
         }
     }
 
-    private func handle(browser: ShortsBrowser, output: String, error: String?) {
+    private func handle(browser: ShortsBrowser, platform: ScrollPlatform, output: String, error: String?) {
         lastPollAt = Date()
         if let error, !error.isEmpty {
             if error.contains("-1743") || error.lowercased().contains("not authorized") {
@@ -224,7 +253,7 @@ final class AutoScroller {
                 problem = "\(browser.name): \(error.prefix(160))"
             }
             setupHint = nil
-            tabs.removeAll { $0.browser == browser }
+            tabs.removeAll { $0.browser == browser && $0.platform == platform }
             return
         }
         var found: [ShortsTabStatus] = []
@@ -244,14 +273,14 @@ final class AutoScroller {
             }
             guard let data = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-            let key = "\(browser.rawValue)#\(index)"
+            let key = "\(browser.rawValue)#\(platform.rawValue)#\(index)"
             let advanced = json["advanced"] as? Int ?? 0
             let previous = advancedByTab[key] ?? advanced
             if advanced > previous { advancedThisSession += advanced - previous }
             advancedByTab[key] = advanced
             var title = (json["title"] as? String) ?? ""
             if title.hasSuffix(" - YouTube") { title = String(title.dropLast(10)) }
-            found.append(ShortsTabStatus(id: key, browser: browser, platform: .youtubeShorts,
+            found.append(ShortsTabStatus(id: key, browser: browser, platform: platform,
                                          commentsOpen: json["comments"] as? Bool ?? false, title: title,
                                          shortsID: json["id"] as? String ?? "",
                                          plays: json["plays"] as? Int ?? 0,
@@ -260,10 +289,11 @@ final class AutoScroller {
                                          advanced: advanced,
                                          method: json["method"] as? String ?? ""))
         }
-        tabs.removeAll { $0.browser == browser }
+        tabs.removeAll { $0.browser == browser && $0.platform == platform }
         tabs.append(contentsOf: found)
-        setupHint = hint
-        problem = hint == nil ? firstError.map { "\(browser.name): \($0)" } : nil
+        tabs.sort { ($0.platform.rawValue, $0.id) < ($1.platform.rawValue, $1.id) }
+        if hint != nil { setupHint = hint } else if platform == .youtubeShorts { setupHint = nil }
+        if let firstError { problem = "\(browser.name): \(firstError)" } else if platform == .youtubeShorts { problem = nil }
     }
 
     /// Runs an AppleScript through /usr/bin/osascript (a hung browser then can't block the UI).
