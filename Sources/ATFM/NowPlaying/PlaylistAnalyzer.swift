@@ -263,16 +263,20 @@ final class PlaylistAnalyzer {
         let duration = json["duration"] as? Double ?? 0
         var candidates: [(source: String, items: [(Double, String)], priority: Int)] = []
 
-        if let chapters = json["chapters"] as? [[String: Any]] {
-            let items = chapters.compactMap { chapter -> (Double, String)? in
-                guard let start = chapter["start_time"] as? Double, let name = chapter["title"] as? String else { return nil }
-                return (start, name)
-            }
-            if items.count >= 3 { candidates.append(("챕터", items, 3)) }
-        }
         if let description = json["description"] as? String {
             let items = Self.parseTimestamps(description)
-            if items.count >= 3 { candidates.append(("영상 설명", items, 2)) }
+            if items.count >= 3 { candidates.append(("영상 설명", items, 3)) }
+        }
+        // yt-dlp's own chapter parse is a fallback only: it can swallow neighbouring timestamps and
+        // invents "<Untitled Chapter N>" entries when the description is loosely formatted.
+        if let chapters = json["chapters"] as? [[String: Any]] {
+            let items = chapters.compactMap { chapter -> (Double, String)? in
+                guard let start = chapter["start_time"] as? Double, let name = chapter["title"] as? String,
+                      !name.hasPrefix("<Untitled"), Self.timestampRegex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil
+                else { return nil }
+                return (start, Self.cleanLabel(name))
+            }
+            if items.count >= 3 { candidates.append(("챕터", items, 1)) }
         }
         if let comments = json["comments"] as? [[String: Any]] {
             let sorted = comments.sorted {
@@ -300,8 +304,9 @@ final class PlaylistAnalyzer {
             return
         }
         var segments: [PlaylistSegment] = []
+        let artistOnRight = Self.artistIsOnRight(best.items.map(\.1))
         for (index, item) in best.items.enumerated() {
-            let (songTitle, artist) = Self.splitTitleArtist(item.1)
+            let (songTitle, artist) = Self.splitTitleArtist(item.1, artistOnRight: artistOnRight)
             segments.append(PlaylistSegment(id: index, start: item.0,
                                             end: index + 1 < best.items.count ? best.items[index + 1].0 : (duration > 0 ? duration : nil),
                                             raw: item.1, title: songTitle, artist: artist))
@@ -351,29 +356,84 @@ final class PlaylistAnalyzer {
             for match in matches.reversed() {
                 if let r = Range(match.range, in: label) { label.removeSubrange(r) }
             }
-            label = label.trimmingCharacters(in: CharacterSet(charactersIn: " \t-–—|~:•·►▶[]()【】「」＊*.,")).trimmingCharacters(in: .whitespaces)
-            guard !label.isEmpty, label.count <= 120 else { continue }
+            label = cleanLabel(label)
+            guard !label.isEmpty, label.count <= 120, label.contains(where: { $0.isLetter || $0.isNumber }) else { continue }
             items.append((seconds, label))
         }
-        // Keep the list monotonic (drop stray earlier timestamps) and unique.
+        // Keep the list monotonic (drop stray earlier timestamps); merge lines that share a timestamp
+        // (e.g. a title line followed by a quote/credit line) by keeping the longer label.
         var out: [(Double, String)] = []
         var last = -1.0
         for item in items where item.0 >= last {
-            out.append(item)
+            if let index = out.indices.last, out[index].0 == item.0 {
+                if item.1.count > out[index].1.count { out[index].1 = item.1 }
+            } else {
+                out.append(item)
+            }
             last = item.0
         }
         return out
     }
 
-    /// "Artist - Title" is the most common written form; keep both halves so AI or LRCLIB can sort it out.
-    static func splitTitleArtist(_ label: String) -> (String, String) {
-        for separator in [" - ", " – ", " — ", " | ", " / ", " _ "] {
+    /// Strips list bullets / separators around a title but keeps balanced brackets and quotes intact.
+    static func cleanLabel(_ raw: String) -> String {
+        var label = raw.trimmingCharacters(in: .whitespaces)
+        let separators = CharacterSet(charactersIn: "-–—|~:•·►▶＊*,")
+        label = label.trimmingCharacters(in: separators).trimmingCharacters(in: .whitespaces)
+        // Unbalanced wrapping brackets / quotes left over from "[0:00]" or "(0:00)" style lists.
+        let pairs: [(Character, Character)] = [("[", "]"), ("(", ")"), ("【", "】"), ("「", "」"), ("\"", "\""), ("“", "”"), ("'", "'")]
+        var changed = true
+        while changed, !label.isEmpty {
+            changed = false
+            for (open, close) in pairs {
+                let opens = label.filter { $0 == open }.count, closes = label.filter { $0 == close }.count
+                if label.first == open, open == close ? opens % 2 == 1 : opens > closes { label.removeFirst(); changed = true }
+                if let lastChar = label.last, lastChar == close, open == close ? label.filter({ $0 == close }).count % 2 == 1 : label.filter({ $0 == close }).count > label.filter({ $0 == open }).count {
+                    label.removeLast(); changed = true
+                }
+            }
+            label = label.trimmingCharacters(in: .whitespaces)
+        }
+        if label.count >= 2, let first = label.first, let last = label.last, (first == "\"" && last == "\"") || (first == "“" && last == "”") {
+            label = String(label.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
+        }
+        return label.trimmingCharacters(in: separators).trimmingCharacters(in: .whitespaces)
+    }
+
+    static let separators = [" - ", " – ", " — ", " | ", " / ", " _ "]
+
+    static func halves(_ label: String) -> (String, String)? {
+        for separator in separators {
             let parts = label.components(separatedBy: separator)
             if parts.count == 2 {
-                return (parts[1].trimmingCharacters(in: .whitespaces), parts[0].trimmingCharacters(in: .whitespaces))
+                return (parts[0].trimmingCharacters(in: .whitespaces), parts[1].trimmingCharacters(in: .whitespaces))
             }
         }
-        return (label, "")
+        return nil
+    }
+
+    /// Lists are written either "Artist - Title" or "Title - Artist". Decide once for the whole list:
+    /// the artist side repeats more often (same singer, several songs) and carries feat./&/ft. markers.
+    static func artistIsOnRight(_ labels: [String]) -> Bool {
+        var leftScore = 0, rightScore = 0
+        var leftCounts: [String: Int] = [:], rightCounts: [String: Int] = [:]
+        let markers = ["feat", "ft.", "ft ", "&", " x ", "with "]
+        for label in labels {
+            guard let (left, right) = halves(label) else { continue }
+            leftCounts[left.lowercased(), default: 0] += 1
+            rightCounts[right.lowercased(), default: 0] += 1
+            let l = left.lowercased(), r = right.lowercased()
+            if markers.contains(where: { l.contains($0) }) { leftScore += 1 }
+            if markers.contains(where: { r.contains($0) }) { rightScore += 1 }
+        }
+        leftScore += leftCounts.values.filter { $0 >= 2 }.reduce(0, +)
+        rightScore += rightCounts.values.filter { $0 >= 2 }.reduce(0, +)
+        return rightScore > leftScore      // tie → the common "Artist - Title" form
+    }
+
+    static func splitTitleArtist(_ label: String, artistOnRight: Bool = false) -> (String, String) {
+        guard let (left, right) = halves(label) else { return (label, "") }
+        return artistOnRight ? (left, right) : (right, left)
     }
 
     // MARK: One Gemini call to name the original songs
