@@ -52,7 +52,10 @@ struct MiniPlayerView: View {
                     Spacer(minLength: 2)
                     ProgressLine(track: monitor.track, now: monitor.now)
                 }
-                TransportControls(monitor: monitor, size: 14)
+                VStack(spacing: 5) {
+                    TransportControls(monitor: monitor, size: 14)
+                    VolumeControl(volume: controller.systemVolume)
+                }
             }
             .padding(.leading, 12)
             .padding(.trailing, 14)
@@ -532,6 +535,30 @@ struct ProgressLine: View {
     static func format(_ seconds: Double) -> String {
         let total = max(0, Int(seconds))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Speaker button (mute) + a slim system-volume slider.
+struct VolumeControl: View {
+    var volume: SystemVolume
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button { volume.toggleMute() } label: {
+                Image(systemName: volume.symbol)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(volume.isMuted ? Color.secondary : Color.primary.opacity(0.75))
+                    .frame(width: 14, height: 12)
+            }
+            .buttonStyle(.plain)
+            .help(volume.isMuted ? "음소거 해제" : "음소거")
+            Slider(value: Binding(get: { volume.isMuted ? 0 : volume.volume }, set: { volume.setVolume($0) }), in: 0...1)
+                .controlSize(.mini)
+                .frame(width: 72)
+                .help("시스템 볼륨 \(Int((volume.volume * 100).rounded()))%")
+        }
+        .opacity(volume.isAvailable ? 1 : 0.35)
+        .disabled(!volume.isAvailable)
     }
 }
 

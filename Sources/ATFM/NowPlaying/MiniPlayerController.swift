@@ -46,6 +46,7 @@ final class MiniPlayerController {
     private(set) var isPlaylistExpanded = false
     let audio = AudioLevelMonitor()
     let playlist = PlaylistAnalyzer()
+    let systemVolume = SystemVolume()
     /// Shows a short notice at the top of the screen (wired to the tools HUD by AppDelegate).
     @ObservationIgnored var notify: ((String, String) -> Void)?
     var currentSize: NSSize {
