@@ -194,6 +194,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         if env["ATFM_DEBUG_EXTCAL"] == "1" { externalCalendar.isEnabled = true }
+        if env["ATFM_DEBUG_PLAYLIST_SAMPLE"] == "1" {   // with ATFM_DEBUG_NOWPLAYING_SAMPLE=1: fake analysed playlist, box open
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                MainActor.assumeIsolated {
+                    self.miniPlayer?.playlist.debugInjectSample()
+                    self.miniPlayer?.setPlaylistExpanded(true)
+                }
+            }
+        }
         if let day = env["ATFM_DEBUG_DATES_SELECT"] {   // "2026-09-25": select a day in the 날짜 tab
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
             if let date = f.date(from: day) { dates.selectedDay = Calendar.current.startOfDay(for: date); dates.visibleMonth = dates.selectedDay }

@@ -33,6 +33,7 @@ enum MiniPlayerSourceFilter: String, CaseIterable, Identifiable {
 final class MiniPlayerController {
     static let size = NSSize(width: 330, height: 92)
     static let lyricsHeight: CGFloat = 236
+    static let playlistHeight: CGFloat = 300
     private static let margin: CGFloat = 16
 
     private(set) var isEnabled: Bool
@@ -42,8 +43,15 @@ final class MiniPlayerController {
     private(set) var isVisible = false
     private(set) var isLyricsExpanded: Bool
     private(set) var liveVisualizer: Bool
+    private(set) var isPlaylistExpanded = false
     let audio = AudioLevelMonitor()
-    var currentSize: NSSize { isLyricsExpanded ? NSSize(width: Self.size.width, height: Self.size.height + Self.lyricsHeight) : Self.size }
+    let playlist = PlaylistAnalyzer()
+    var currentSize: NSSize {
+        var height = Self.size.height
+        if isLyricsExpanded { height += Self.lyricsHeight }
+        if isPlaylistExpanded { height += Self.playlistHeight }
+        return NSSize(width: Self.size.width, height: height)
+    }
 
     let monitor: NowPlayingMonitor
     let lyrics: LyricsController
@@ -136,9 +144,51 @@ final class MiniPlayerController {
     /// Opens/closes the lyrics box. The window grows away from the nearest screen edge so it stays on screen.
     func setLyricsExpanded(_ expanded: Bool) {
         guard expanded != isLyricsExpanded else { return }
+        if expanded, isPlaylistExpanded { isPlaylistExpanded = false }
         isLyricsExpanded = expanded
         UserDefaults.standard.set(expanded, forKey: Key.lyrics)
         lyrics.autoFetch = expanded
+        resizePanel(bounce: false)
+    }
+
+    /// Opens/closes the YouTube playlist box with a little bounce ("퉁").
+    func setPlaylistExpanded(_ expanded: Bool) {
+        guard expanded != isPlaylistExpanded else { return }
+        if expanded, isLyricsExpanded {
+            isLyricsExpanded = false
+            UserDefaults.standard.set(false, forKey: Key.lyrics)
+            lyrics.autoFetch = false
+        }
+        isPlaylistExpanded = expanded
+        resizePanel(bounce: expanded)
+    }
+
+    /// Analyze the current YouTube video (or just toggle the box when it's already done).
+    func togglePlaylist() {
+        guard let track = monitor.track else { return }
+        switch playlist.state {
+        case .ready:
+            setPlaylistExpanded(!isPlaylistExpanded)
+        case .idle, .failed:
+            playlist.analyze(track: track)
+            observePlaylist()
+        default:
+            break
+        }
+    }
+
+    private func observePlaylist() {
+        withObservationTracking {
+            _ = playlist.state
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.playlist.state == .ready { self.setPlaylistExpanded(true) } else if self.playlist.isBusy { self.observePlaylist() }
+            }
+        }
+    }
+
+    private func resizePanel(bounce: Bool) {
         guard let panel, isVisible else { return }
         let old = panel.frame
         let newSize = currentSize
@@ -147,13 +197,35 @@ final class MiniPlayerController {
         var origin = old.origin
         if anchorTop { origin.y = old.maxY - newSize.height }
         origin.y = max(screen.minY, min(origin.y, screen.maxY - newSize.height))
+        let target = NSRect(origin: origin, size: newSize)
         programmaticMove = true
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.22
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(NSRect(origin: origin, size: newSize), display: true)
-        } completionHandler: { [weak self] in
-            MainActor.assumeIsolated { self?.programmaticMove = false }
+        if bounce {
+            // Overshoot by 14 pt in the growth direction, then settle.
+            let overshoot = anchorTop ? NSRect(x: origin.x, y: origin.y - 14, width: newSize.width, height: newSize.height + 14)
+                                      : NSRect(x: origin.x, y: origin.y, width: newSize.width, height: newSize.height + 14)
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.26
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().setFrame(overshoot, display: true)
+            } completionHandler: {
+                MainActor.assumeIsolated {
+                    NSAnimationContext.runAnimationGroup { ctx in
+                        ctx.duration = 0.18
+                        ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                        panel.animator().setFrame(target, display: true)
+                    } completionHandler: { [weak self] in
+                        MainActor.assumeIsolated { self?.programmaticMove = false }
+                    }
+                }
+            }
+        } else {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.22
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(target, display: true)
+            } completionHandler: { [weak self] in
+                MainActor.assumeIsolated { self?.programmaticMove = false }
+            }
         }
     }
 
@@ -188,6 +260,11 @@ final class MiniPlayerController {
         }
         if shouldShow { show() } else { hide() }
         syncAudio()
+        // A different video/song → the analysed playlist no longer applies.
+        if let analysedTitle = playlist.forTrackTitle, analysedTitle != (monitor.track?.title ?? "") {
+            playlist.clear()
+            if isPlaylistExpanded { setPlaylistExpanded(false) }
+        }
     }
 
     func setLiveVisualizer(_ on: Bool) {

@@ -16,6 +16,11 @@ struct MiniPlayerView: View {
                 LyricsBox(lyrics: controller.lyrics, monitor: monitor)
                     .frame(height: MiniPlayerController.lyricsHeight)
             }
+            if controller.isPlaylistExpanded {
+                Divider().padding(.horizontal, 12)
+                PlaylistBox(analyzer: controller.playlist, monitor: monitor)
+                    .frame(height: MiniPlayerController.playlistHeight)
+            }
         }
         .frame(width: controller.currentSize.width, height: controller.currentSize.height, alignment: .top)
         .overlay(
@@ -54,6 +59,22 @@ struct MiniPlayerView: View {
             .padding(.vertical, 12)
 
             HStack(spacing: 4) {
+                if monitor.track?.isBrowser == true {
+                    Button { controller.togglePlaylist() } label: {
+                        Group {
+                            if controller.playlist.isBusy {
+                                ProgressView().controlSize(.mini)
+                            } else {
+                                Image(systemName: "music.note.list")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(playlistButtonColor)
+                            }
+                        }
+                        .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.plain)
+                    .help(playlistHelp)
+                }
                 Button { controller.setLyricsExpanded(!controller.isLyricsExpanded) } label: {
                     Image(systemName: "music.mic")
                         .font(.system(size: 12, weight: .semibold))
@@ -71,9 +92,175 @@ struct MiniPlayerView: View {
                 .buttonStyle(.plain)
                 .help("닫기 (ATFM에서 다시 켤 수 있어요)")
             }
-            .opacity(hovering || controller.isLyricsExpanded ? 1 : 0.4)
+            .opacity(hovering || controller.isLyricsExpanded || controller.isPlaylistExpanded || controller.playlist.isBusy ? 1 : 0.4)
             .padding(6)
         }
+    }
+
+    private var playlistButtonColor: Color {
+        switch controller.playlist.state {
+        case .ready: return controller.isPlaylistExpanded ? Theme.accent : Theme.accent.opacity(0.8)
+        case .failed: return .red
+        default: return .secondary
+        }
+    }
+
+    private var playlistHelp: String {
+        switch controller.playlist.state {
+        case .idle: return "YouTube 플레이리스트 분석: 설명·댓글의 타임스탬프로 곡 목록과 가사 찾기"
+        case .locating: return "YouTube 탭 찾는 중…"
+        case .fetching: return "영상 설명·댓글 받는 중…"
+        case .resolving: return "곡 이름 정리 중 (AI)…"
+        case .ready: return controller.isPlaylistExpanded ? "플레이리스트 닫기" : "플레이리스트 보기"
+        case .failed(let message): return "실패: \(message) · 다시 시도"
+        }
+    }
+}
+
+// MARK: - YouTube playlist box
+
+struct PlaylistBox: View {
+    var analyzer: PlaylistAnalyzer
+    var monitor: NowPlayingMonitor
+    @Environment(\.colorScheme) private var scheme
+
+    private var elapsed: Double {
+        monitor.track?.currentElapsed(at: monitor.now) ?? 0
+    }
+
+    var body: some View {
+        let current = analyzer.segment(at: elapsed)
+        VStack(spacing: 0) {
+            header(current: current)
+            if let analysis = analyzer.analysis, let current {
+                nowPlaying(current: current, total: analysis.segments.count)
+                lyricsArea(current: current)
+                trackStrip(analysis: analysis, current: current)
+            } else {
+                Spacer()
+                Text("곡 목록이 없어요").font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .onChange(of: current?.id) { _, _ in prefetch(current) }
+        .onAppear { prefetch(current) }
+    }
+
+    private func prefetch(_ current: PlaylistSegment?) {
+        guard let current else { return }
+        analyzer.ensureLyrics(for: current)
+        if let next = analyzer.nextSegment(after: current) { analyzer.ensureLyrics(for: next) }
+    }
+
+    private func header(current: PlaylistSegment?) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note.list").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            Text("플레이리스트").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            if let analysis = analyzer.analysis {
+                Text("\(analysis.segments.count)곡 · \(analysis.source)")
+                    .font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
+                if analysis.usedAI {
+                    Text("AI").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Theme.accent.opacity(0.15)))
+                }
+            }
+            Spacer()
+            if let current, analyzer.lyrics[current.id]?.isSynced == true {
+                HStack(spacing: 2) {
+                    Button { analyzer.adjustOffset(for: current, by: -0.5) } label: { Image(systemName: "minus.circle") }
+                    Text(String(format: "%+.1fs", analyzer.offset(for: current)))
+                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary).frame(width: 34)
+                    Button { analyzer.adjustOffset(for: current, by: 0.5) } label: { Image(systemName: "plus.circle") }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .help("이 곡 가사 싱크 보정")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
+    private func nowPlaying(current: PlaylistSegment, total: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(current.id + 1)/\(total)")
+                .font(.system(size: 10, weight: .semibold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(current.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                if !current.artist.isEmpty {
+                    Text(current.artist).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer()
+            if let next = analyzer.nextSegment(after: current) {
+                Text("다음 \(next.timeLabel) \(next.title)")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
+                    .frame(maxWidth: 120, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func lyricsArea(current: PlaylistSegment) -> some View {
+        if let found = analyzer.lyrics[current.id] {
+            if let synced = found.synced, !synced.isEmpty {
+                let songTime = elapsed - current.start + analyzer.offset(for: current)
+                let index = synced.lastIndex { $0.time <= songTime }
+                SyncedLyricsList(lines: synced, currentIndex: index) { line in
+                    monitor.seek(to: current.start + line.time - analyzer.offset(for: current))
+                }
+            } else {
+                ScrollView(showsIndicators: false) {
+                    Text(found.plain ?? "")
+                        .font(.system(size: 13))
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                }
+            }
+        } else if analyzer.lyricsLoading.contains(current.id) {
+            VStack { Spacer(); ProgressView().controlSize(.small); Text("가사 찾는 중…").font(.system(size: 11)).foregroundStyle(.secondary); Spacer() }
+                .frame(maxWidth: .infinity)
+        } else {
+            VStack { Spacer(); Text("이 곡의 가사를 찾지 못했어요").font(.system(size: 12)).foregroundStyle(.secondary); Spacer() }
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func trackStrip(analysis: PlaylistAnalysis, current: PlaylistSegment) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(analysis.segments) { segment in
+                        let isCurrent = segment.id == current.id
+                        Button {
+                            monitor.seek(to: segment.start + 0.5)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(segment.timeLabel).font(.system(size: 9, design: .monospaced)).foregroundStyle(isCurrent ? Theme.accent : Color.secondary)
+                                Text(segment.title).font(.system(size: 10, weight: isCurrent ? .semibold : .regular)).lineLimit(1)
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Capsule().fill(isCurrent ? Theme.accent.opacity(0.16) : Theme.chipFill(scheme)))
+                        }
+                        .buttonStyle(.plain)
+                        .id(segment.id)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+            .onChange(of: current.id) { _, id in withAnimation { proxy.scrollTo(id, anchor: .center) } }
+            .onAppear { proxy.scrollTo(current.id, anchor: .center) }
+        }
+        .frame(height: 34)
     }
 }
 

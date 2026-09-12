@@ -173,6 +173,32 @@ enum Probe {
                 print("translate probe: macOS 15+ only")
             }
         }
+        if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_PLAYLIST"] {   // video id or URL; "|nolyrics" to skip lyrics
+            MainActor.assumeIsolated {
+                let parts = spec.split(separator: "|").map(String.init)
+                let videoID = PlaylistAnalyzer.videoID(from: parts[0]) ?? parts[0]
+                let analyzer = PlaylistAnalyzer()
+                analyzer.analyzeVideo(id: videoID)
+                let deadline = Date().addingTimeInterval(120)
+                while analyzer.isBusy, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.25)) }
+                switch analyzer.state {
+                case .ready:
+                    let a = analyzer.analysis!
+                    print("playlist probe: \(a.videoTitle) · \(a.channel) · \(Int(a.duration))s · source=\(a.source) · ai=\(a.usedAI) · \(a.segments.count) songs")
+                    for seg in a.segments.prefix(40) { print("   \(seg.timeLabel)  \(seg.title)  —  \(seg.artist.isEmpty ? "?" : seg.artist)   [\(seg.raw)]") }
+                    if !parts.contains("nolyrics"), let first = a.segments.first {
+                        analyzer.ensureLyrics(for: first)
+                        let until = Date().addingTimeInterval(20)
+                        while analyzer.lyricsLoading.contains(first.id), Date() < until { RunLoop.main.run(until: Date().addingTimeInterval(0.25)) }
+                        if let found = analyzer.lyrics[first.id] {
+                            print("playlist probe: lyrics for '\(first.title)': synced=\(found.isSynced) lines=\(found.synced?.count ?? 0) plain=\((found.plain ?? "").prefix(60))")
+                        } else { print("playlist probe: no lyrics for '\(first.title)'") }
+                    }
+                case .failed(let message): print("playlist probe: FAILED \(message)")
+                default: print("playlist probe: timed out in state \(analyzer.state)")
+                }
+            }
+        }
         if let days = ProcessInfo.processInfo.environment["ATFM_PROBE_HOLIDAYS"] {   // "2026-09-24,2026-09-26"
             MainActor.assumeIsolated {
                 let dir = ProcessInfo.processInfo.environment["ATFM_DEBUG_DATA_DIR"].map { URL(fileURLWithPath: $0) }

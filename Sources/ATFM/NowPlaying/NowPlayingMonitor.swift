@@ -175,12 +175,15 @@ final class NowPlayingMonitor {
 
     /// Fake track + generated artwork for README screenshots (ATFM_DEBUG_NOWPLAYING_SAMPLE=1).
     private func injectSample() {
-        let spotify = NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").first
-        track = NowPlayingTrack(title: "Midnight Drive", artist: "Neon Skyline", album: "City Lights",
-                                duration: 214, elapsed: 73, rate: 1, timestamp: Date(), isPlaying: true,
-                                pid: spotify?.processIdentifier ?? 0,
-                                sourceBundleID: spotify?.bundleIdentifier ?? "com.spotify.client",
-                                sourceName: spotify?.localizedName ?? "Spotify", hasArtwork: true)
+        let asBrowser = ProcessInfo.processInfo.environment["ATFM_DEBUG_PLAYLIST_SAMPLE"] == "1"
+        let bundleID = asBrowser ? "com.google.Chrome" : "com.spotify.client"
+        let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+        track = NowPlayingTrack(title: asBrowser ? "🎧 겨울 감성 팝송 플레이리스트" : "Midnight Drive",
+                                artist: asBrowser ? "ATFM Playlist" : "Neon Skyline", album: asBrowser ? "" : "City Lights",
+                                duration: asBrowser ? 1560 : 214, elapsed: 73, rate: 1, timestamp: Date(), isPlaying: true,
+                                pid: app?.processIdentifier ?? 0,
+                                sourceBundleID: app?.bundleIdentifier ?? bundleID,
+                                sourceName: app?.localizedName ?? (asBrowser ? "Google Chrome" : "Spotify"), hasArtwork: true)
         let size = NSSize(width: 300, height: 300)
         artwork = NSImage(size: size, flipped: false) { rect in
             let gradient = NSGradient(colors: [NSColor(srgbRed: 0.16, green: 0.20, blue: 0.55, alpha: 1),

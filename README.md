@@ -41,10 +41,11 @@
 
 <p>
   <img src="docs/screenshots/miniplayer.png" width="300" alt="미니 플레이어 플로팅 패널">&nbsp;&nbsp;
+  <img src="docs/screenshots/miniplayer-playlist.png" width="300" alt="미니 플레이어 YouTube 플레이리스트 분석">&nbsp;&nbsp;
   <img src="docs/screenshots/hud-text.png" width="260" alt="화면 텍스트 복사 HUD">&nbsp;&nbsp;
   <img src="docs/screenshots/hud-color.png" width="140" alt="색상 추출 HUD">
 </p>
-<sub>플로팅 미니 플레이어 · 빠른 툴의 상단 팝업(텍스트 복사 / 색상 추출) · 설정 탭은 <a href="docs/screenshots/settings.png">여기</a></sub>
+<sub>플로팅 미니 플레이어 · YouTube 플레이리스트 분석 박스 · 빠른 툴의 상단 팝업(텍스트 복사 / 색상 추출) · 설정 탭은 <a href="docs/screenshots/settings.png">여기</a></sub>
 
 ## 지금 되는 것
 
@@ -153,6 +154,10 @@
   - 영상·오디오는 Homebrew `ffmpeg`(`/opt/homebrew/bin` 또는 `/usr/local/bin`)를 쓰고, 없으면 AVFoundation으로 MP4/MOV/M4A만 지원
   - 저장 위치: 원본 폴더(같은 확장자면 `-변환` 붙임) · 다운로드 · 지정 폴더, 진행률 · 중단 · Finder에서 보기
 - **미니 플레이어** 탭: Spotify(앱·웹 플레이어)나 다른 앱이 노래를 재생하면 화면 구석에 작은 플레이어가 뜹니다
+  - **YouTube 플레이리스트 분석**(마이크 옆 목록 아이콘, 브라우저 재생일 때): 재생 중인 영상의 탭을 찾아 yt-dlp로 챕터·설명·고정 댓글·상위 댓글을
+    한 번에 받고, `0:00 곡명` 형태의 타임스탬프 목록 중 가장 긴 것을 고름. 가수 표기가 없으면 Gemini 한 번으로 원곡 제목·가수를 정리(캐시).
+    끝나면 플레이어가 살짝 튀며 아래로 펼쳐지고, 영상 재생 위치에 맞춰 현재 곡·다음 곡이 바뀌며 그 곡의 가사를 LRCLIB에서 (현재·다음 곡만 미리)
+    가져와 표시. 싱크 가사는 곡 시작 시각 기준으로 흐르고 ±0.5초 보정, 하단 곡 칩을 누르면 그 곡으로 이동. 영상별 결과는 `playlists/`에 저장
   - 아티스트 이름 옆 5칸 막대 **비주얼라이저**: 실제 시스템 오디오를 Core Audio 프로세스 탭(macOS 14.2+)으로 읽어 5개 대역
     (40–160 · 160–450 · 450–1.3k · 1.3k–4k · 4k–12k Hz)의 크기를 표시. 플레이어가 보이고 재생 중일 때만 탭을 열고, 처음엔 macOS가
     "시스템 오디오 녹음" 권한을 물어봄(녹음·저장 없음). 권한이 없거나 소리가 아직 안 들어오면 사인파 애니메이션으로 대체.
@@ -198,6 +203,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_DEBUG_AUDIO_TAP=1` | 실행 직후 비주얼라이저 오디오 탭을 6초 동안 돌리고 `Application Support/ATFM/audio-tap.txt`에 대역 레벨을 기록합니다 |
+| `ATFM_DEBUG_PLAYLIST_SAMPLE=1` (+`ATFM_DEBUG_NOWPLAYING_SAMPLE=1`) | 미니 플레이어에 가짜 플레이리스트 분석 결과를 펼쳐 보여줍니다; `ATFM_PROBE_PLAYLIST=<영상 ID\|URL>[\|nolyrics] ATFM --probe`는 실제 분석 파이프라인 실행 |
 | `ATFM_DEBUG_DATES_SELECT=2026-09-25` | 날짜 탭에서 해당 날짜를 선택한 채 시작합니다 (스냅샷용) |
 | `ATFM_DEBUG_EXTCAL=1` | 날짜 탭의 "학교 스케줄 보이기"를 켠 상태로 시작합니다 (캘린더 권한 필요) |
 | `ATFM_DEBUG_CALC=식` · `ATFM_DEBUG_TRANSLATE=글` (+`_RUN=1`) · `ATFM_DEBUG_TIMER=stopwatch\|timer` | 계산기 입력 채우기 · 번역 원문 채우기(바로 번역) · 스탑워치/타이머 샘플 실행 (스냅샷용); `ATFM_PROBE_CALC="식;식" ATFM --probe`는 계산 결과 출력 |
