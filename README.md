@@ -109,6 +109,9 @@
     항목마다 크게 보여줄 숫자를 고를 수 있음: **기념일까지 D-**(빨강) 또는 **처음부터 D+**(파랑, 시작일을 1일로 세는 옵션).
     나머지 정보는 작은 글씨로. 다가오는 순으로 정렬
   - 일정·D-day 행과 달력 날짜에서 **우클릭**: 수정 · D-day/캘린더 표시 토글 · 크게 표시 전환 · 반복 · 색 · 복제 · 삭제, 날짜에서 바로 일정 추가
+  - **공휴일 · 기념일**: 🇰🇷 대한민국 공휴일(설·추석·대체공휴일 포함, 날짜가 빨갛게), 한국 기념일(식목일·어버이날…), 🌐 국제 기념일(내장 목록),
+    그리고 미국·일본·중국·대만·홍콩·영국·독일·프랑스·캐나다·호주·베트남·태국·싱가포르·필리핀·인도네시아·인도 공휴일을 각각 토글.
+    데이터는 Google 공개 공휴일 캘린더(iCal)를 키 없이 받아 `holidays/`에 캐시(일주일마다 갱신), 오프라인이면 내장 목록(고정 공휴일 + 음력 설·추석·부처님오신날)
   - **학교 스케줄 보이기**: 이 Mac의 캘린더 앱(EventKit)에 연결된 계정 — 학교 구글 계정처럼 Google API가 막힌 경우도 캘린더 앱 동기화만
     돼 있으면 됨 — 의 일정을 달력에 링 모양 점과 읽기 전용 행으로 겹쳐 표시. 가져올 캘린더를 계정별로 고르고(처음엔 Google/Exchange
     계정 캘린더가 자동 선택), 우클릭으로 캘린더 앱에서 열기. 켤 때 macOS 캘린더 접근 권한을 한 번 물어봄
@@ -195,6 +198,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_AUTO_SHOW=1` | 실행 직후 말풍선을 바로 엽니다 |
 | `ATFM_SNAPSHOT=/path/out.png` | 잠시 뒤 말풍선 창을 PNG로 저장합니다 (화면 기록 권한 불필요) |
 | `ATFM_DEBUG_AUDIO_TAP=1` | 실행 직후 비주얼라이저 오디오 탭을 6초 동안 돌리고 `Application Support/ATFM/audio-tap.txt`에 대역 레벨을 기록합니다 |
+| `ATFM_DEBUG_DATES_SELECT=2026-09-25` | 날짜 탭에서 해당 날짜를 선택한 채 시작합니다 (스냅샷용) |
 | `ATFM_DEBUG_EXTCAL=1` | 날짜 탭의 "학교 스케줄 보이기"를 켠 상태로 시작합니다 (캘린더 권한 필요) |
 | `ATFM_DEBUG_CALC=식` · `ATFM_DEBUG_TRANSLATE=글` (+`_RUN=1`) · `ATFM_DEBUG_TIMER=stopwatch\|timer` | 계산기 입력 채우기 · 번역 원문 채우기(바로 번역) · 스탑워치/타이머 샘플 실행 (스냅샷용); `ATFM_PROBE_CALC="식;식" ATFM --probe`는 계산 결과 출력 |
 | `ATFM_DEBUG_DATES_EDITOR=1` | 날짜 탭 위에 일정 편집 폼을 인라인으로 띄웁니다 (스냅샷용) |
@@ -236,7 +240,7 @@ Sources/ATFM
 ├── Calculator/  계산기 (CalcEngine 파서·평가기, 기록)
 ├── Translate/   번역 (Apple Translation 세션 호스트, Gemini 단발 호출)
 ├── Timers/      타이머 (스탑워치·카운트다운, 메뉴 막대 표시, 알림)
-├── Dates/       날짜 (DateStore: 일정·D-day 모델, 반복 계산, dates.json · ExternalCalendar: EventKit 읽기)
+├── Dates/       날짜 (DateStore: 일정·D-day 모델, 반복 계산, dates.json · ExternalCalendar: EventKit 읽기 · HolidayStore: 공휴일 피드)
 ├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
 ├── AutoScroll/  자동 스크롤 (쇼츠 탭 폴링 osascript + 페이지 에이전트 JS)

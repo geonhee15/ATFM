@@ -81,6 +81,7 @@ struct RootView: View {
     var notes: QuickNotesStore
     var dates: DateStore
     var externalCalendar: ExternalCalendarSource
+    var holidays: HolidayStore
     var dictionary: DictionaryHub
     var calculator: CalculatorModel
     var translator: TranslatorModel
@@ -119,7 +120,7 @@ struct RootView: View {
                 case .notes:
                     QuickNotesView(store: notes)
                 case .dates:
-                    DatesView(store: dates, external: externalCalendar)
+                    DatesView(store: dates, external: externalCalendar, holidays: holidays)
                 case .dictionary:
                     DictionaryView(hub: dictionary)
                 case .calculator:

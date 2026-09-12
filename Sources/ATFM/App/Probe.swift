@@ -173,6 +173,22 @@ enum Probe {
                 print("translate probe: macOS 15+ only")
             }
         }
+        if let days = ProcessInfo.processInfo.environment["ATFM_PROBE_HOLIDAYS"] {   // "2026-09-24,2026-09-26"
+            MainActor.assumeIsolated {
+                let dir = ProcessInfo.processInfo.environment["ATFM_DEBUG_DATA_DIR"].map { URL(fileURLWithPath: $0) }
+                    ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("ATFM")
+                let store = HolidayStore(directory: dir)
+                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
+                print("holiday probe: kr loaded=\(store.loaded["kr"]?.count ?? -1)")
+                for day in days.split(separator: ",").map(String.init) {
+                    guard let date = f.date(from: day) else { continue }
+                    let list = store.holidays(on: date).map { "\($0.flag)\($0.title)\($0.isPublic ? "(공휴일)" : "")" }
+                    print("holiday probe: \(day) public=\(store.isKoreanPublicHoliday(date)) → \(list)")
+                }
+                let sept = (store.loaded["kr"] ?? []).filter { Calendar.current.component(.year, from: $0.date) == 2026 && Calendar.current.component(.month, from: $0.date) == 9 }
+                print("holiday probe: 2026-09 kr entries: \(sept.map { "\(Calendar.current.component(.day, from: $0.date)) \($0.title) \($0.isPublic)" })")
+            }
+        }
         if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_CALC"] {   // "expr;expr;…"
             for expr in spec.split(separator: ";").map(String.init) {
                 var engine = CalcEngine(degrees: true, ans: 42)

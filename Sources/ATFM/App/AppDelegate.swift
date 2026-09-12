@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var checklist: ChecklistStore?
     private var notes: QuickNotesStore?
     private var dates: DateStore?
+    private var holidays: HolidayStore?
     private var cleaner: AppCleaner?
     private let keepAwake = KeepAwake()
     private var gemini: GeminiChat?
@@ -79,6 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.notes = notes
         let dates = DateStore(directory: store.directory)
         self.dates = dates
+        let holidays = HolidayStore(directory: store.directory)
+        self.holidays = holidays
         let gemini = GeminiChat(directory: store.directory)
         gemini.copyToPasteboard = { [weak monitor] text in
             let pasteboard = NSPasteboard.general
@@ -93,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, externalCalendar: externalCalendar, dictionary: dictionary,
+                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
@@ -191,6 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         if env["ATFM_DEBUG_EXTCAL"] == "1" { externalCalendar.isEnabled = true }
+        if let day = env["ATFM_DEBUG_DATES_SELECT"] {   // "2026-09-25": select a day in the 날짜 tab
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
+            if let date = f.date(from: day) { dates.selectedDay = Calendar.current.startOfDay(for: date); dates.visibleMonth = dates.selectedDay }
+        }
         if let expr = env["ATFM_DEBUG_CALC"] { calculator.input = expr }
         if let text = env["ATFM_DEBUG_TRANSLATE"] {
             translator.sourceText = text

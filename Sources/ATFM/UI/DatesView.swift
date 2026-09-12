@@ -3,6 +3,7 @@ import SwiftUI
 struct DatesView: View {
     @Bindable var store: DateStore
     @Bindable var external: ExternalCalendarSource
+    @Bindable var holidays: HolidayStore
     @Environment(\.colorScheme) private var scheme
     @State private var editing: DateEntry?
     @State private var showEditor = false
@@ -20,6 +21,7 @@ struct DatesView: View {
                 calendarCard
                 selectedDayCard
                 ddayCard
+                holidayCard
                 schoolCard
             }
             .padding(.bottom, 6)
@@ -93,7 +95,9 @@ struct DatesView: View {
                                     isSelected: day == store.selectedDay,
                                     weekday: column,
                                     events: store.events(on: day),
-                                    external: external.events(on: day)) {
+                                    external: external.events(on: day),
+                                    isHoliday: holidays.isKoreanPublicHoliday(day),
+                                    holidayFlags: holidays.holidays(on: day).filter { $0.region != "kr" }.map(\.flag)) {
                                 store.selectedDay = day
                             } add: {
                                 store.selectedDay = day
@@ -122,6 +126,7 @@ struct DatesView: View {
     private var selectedDayCard: some View {
         let events = store.events(on: store.selectedDay)
         let schoolEvents = external.events(on: store.selectedDay)
+        let dayHolidays = holidays.holidays(on: store.selectedDay)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(Self.dayTitle(store.selectedDay))
@@ -136,7 +141,22 @@ struct DatesView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.accent)
             }
-            if events.isEmpty && schoolEvents.isEmpty {
+            ForEach(dayHolidays) { holiday in
+                HStack(spacing: 8) {
+                    Text(holiday.flag).font(.system(size: 12))
+                    Text(holiday.title)
+                        .font(.system(size: 12, weight: holiday.isPublic && holiday.region == "kr" ? .semibold : .medium))
+                        .foregroundStyle(holiday.isPublic && holiday.region == "kr" ? Color.red : Color.primary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(holiday.region == "intl" ? "국제 기념일" : holiday.isPublic ? "공휴일" : "기념일")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+            }
+            if events.isEmpty && schoolEvents.isEmpty && dayHolidays.isEmpty {
                 Text("일정 없음 · 더블클릭 또는 우클릭으로 추가")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
@@ -196,6 +216,82 @@ struct DatesView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+    }
+
+    // MARK: 공휴일 · 기념일
+
+    private var holidayCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "flag.2.crossed")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("공휴일 · 기념일")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(holidayStatus)
+                        .font(.system(size: 11))
+                        .foregroundStyle(holidays.lastError == nil ? Color.secondary : Color.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Button { holidays.refreshAll() } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("공휴일 데이터 새로 받기")
+            }
+            VStack(spacing: 6) {
+                holidayToggle("🇰🇷 대한민국 공휴일", "설·추석·대체공휴일 포함 · 날짜가 빨갛게", isOn: $holidays.showKorean)
+                holidayToggle("🇰🇷 한국 기념일", "식목일 · 어버이날 · 스승의날 · 국군의날 등", isOn: $holidays.showKoreanObservances)
+                holidayToggle("🌐 국제 기념일", "세계 여성의 날 · 지구의 날 · 핼러윈 등", isOn: $holidays.showInternationalDays)
+            }
+            .padding(.leading, 40)
+            DisclosureGroup {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {
+                    ForEach(HolidayCountry.all) { country in
+                        Toggle(isOn: Binding(get: { holidays.countries.contains(country.code) }, set: { _ in holidays.toggleCountry(country.code) })) {
+                            Text("\(country.flag) \(country.name)").font(.system(size: 12))
+                        }
+                        .toggleStyle(.checkbox)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.top, 4)
+            } label: {
+                Text("다른 나라 공휴일 · \(holidays.activeCountries.count)개 나라")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.leading, 40)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .card()
+    }
+
+    private func holidayToggle(_ title: String, _ subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 12, weight: .medium))
+                Text(subtitle).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
+            }
+            Spacer()
+            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.mini)
+        }
+    }
+
+    private var holidayStatus: String {
+        if let error = holidays.lastError { return error }
+        if !holidays.fetching.isEmpty { return "공휴일 데이터를 받는 중…" }
+        if let date = holidays.lastRefresh {
+            let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR"); f.dateFormat = "M월 d일 HH:mm"
+            return "Google 공휴일 캘린더 · \(f.string(from: date)) 갱신 · 일주일마다 자동"
+        }
+        return "Google 공휴일 캘린더에서 가져와요 (내려받기 전엔 내장 목록)."
     }
 
     // MARK: 학교 스케줄 (macOS 캘린더 앱에서 가져오기)
@@ -433,6 +529,8 @@ private struct DayCell: View {
     let weekday: Int
     let events: [DateEntry]
     var external: [ExternalEvent] = []
+    var isHoliday = false
+    var holidayFlags: [String] = []
     let select: () -> Void
     let add: () -> Void
 
@@ -441,7 +539,7 @@ private struct DayCell: View {
     private var numberColor: Color {
         if isToday { return .white }
         if !inMonth { return Color.secondary.opacity(0.4) }
-        if weekday == 0 { return Color.red.opacity(0.85) }
+        if weekday == 0 || isHoliday { return Color.red.opacity(0.85) }
         if weekday == 6 { return Color.blue.opacity(0.85) }
         return .primary
     }
@@ -449,10 +547,17 @@ private struct DayCell: View {
     var body: some View {
         VStack(spacing: 2) {
             Text(number)
-                .font(.system(size: 11, weight: isToday ? .bold : .medium))
+                .font(.system(size: 11, weight: isToday || isHoliday ? .bold : .medium))
                 .foregroundStyle(numberColor)
                 .frame(width: 20, height: 20)
                 .background(Circle().fill(isToday ? Theme.accent : Color.clear))
+                .overlay(alignment: .topTrailing) {
+                    if !holidayFlags.isEmpty {
+                        Text(holidayFlags.prefix(2).joined())
+                            .font(.system(size: 6))
+                            .offset(x: 7, y: -2)
+                    }
+                }
             let singles = events.filter { !$0.isMultiDay }
             let spans = events.filter(\.isMultiDay)
             HStack(spacing: 2) {
