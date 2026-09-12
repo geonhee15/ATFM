@@ -41,12 +41,15 @@ enum AppleScriptRunner {
         var pending = browsers.count
         for browser in browsers {
             let titleKey = browser.isSafari ? "name of t" : "title of t"
+            // Inside a browser's `tell` block the word `tab` is the browser's tab class, not the tab
+            // character, so the separator must be spelled as a character id.
             let script = """
+            set sep to character id 9
             tell application id "\(browser.rawValue)"
                 set out to ""
                 repeat with w in windows
                     repeat with t in tabs of w
-                        set out to out & (URL of t) & tab & (\(titleKey)) & linefeed
+                        set out to out & (URL of t) & sep & (\(titleKey)) & linefeed
                     end repeat
                 end repeat
                 return out

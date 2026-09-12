@@ -197,6 +197,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         if env["ATFM_DEBUG_EXTCAL"] == "1" { externalCalendar.isEnabled = true }
+        if env["ATFM_DEBUG_TABS_LOG"] == "1" {   // which YouTube tab the playlist analyzer would pick → Application Support/ATFM/tabs.txt (no titles)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                MainActor.assumeIsolated {
+                    AppleScriptRunner.browserTabs { tabs, error in
+                        var text = "error: \(error ?? "none")\ntabs: \(tabs.count)\n"
+                        for tab in tabs { text += "\(PlaylistAnalyzer.videoID(from: tab.url) ?? "-")\t\(URL(string: tab.url)?.host ?? "?")\n" }
+                        let title = self.nowPlaying.track?.title ?? "(no track)"
+                        text += "match: \(PlaylistAnalyzer.matchVideo(tabs: tabs, trackTitle: title) ?? "nil")\n"
+                        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("ATFM/tabs.txt")
+                        try? text.write(to: url, atomically: true, encoding: .utf8)
+                    }
+                }
+            }
+        }
         if env["ATFM_DEBUG_PLAYLIST_SAMPLE"] == "1" {   // with ATFM_DEBUG_NOWPLAYING_SAMPLE=1: fake analysed playlist, box open
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 MainActor.assumeIsolated {
