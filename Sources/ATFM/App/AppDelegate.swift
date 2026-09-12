@@ -115,6 +115,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let env = ProcessInfo.processInfo.environment
         screenTools.willStartTool = { [weak bubble] in bubble?.hide() }
+        miniPlayer.notify = { [weak self] title, message in
+            self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "music.note.list"), duration: 4)
+        }
         timers.onFinished = { [weak self] message in
             self?.screenTools.hud.show(.message(message, symbol: "timer"), duration: 3)
         }

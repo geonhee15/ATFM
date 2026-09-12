@@ -46,6 +46,8 @@ final class MiniPlayerController {
     private(set) var isPlaylistExpanded = false
     let audio = AudioLevelMonitor()
     let playlist = PlaylistAnalyzer()
+    /// Shows a short notice at the top of the screen (wired to the tools HUD by AppDelegate).
+    @ObservationIgnored var notify: ((String, String) -> Void)?
     var currentSize: NSSize {
         var height = Self.size.height
         if isLyricsExpanded { height += Self.lyricsHeight }
@@ -183,7 +185,14 @@ final class MiniPlayerController {
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                if self.playlist.state == .ready { self.setPlaylistExpanded(true) } else if self.playlist.isBusy { self.observePlaylist() }
+                switch self.playlist.state {
+                case .ready:
+                    self.setPlaylistExpanded(true)
+                case .failed(let message):
+                    self.notify?("플레이리스트 분석 실패", message)
+                default:
+                    if self.playlist.isBusy { self.observePlaylist() }
+                }
             }
         }
     }

@@ -116,10 +116,16 @@ final class PlaylistAnalyzer {
         lyricsLoading = []
         lyricsMissing = []
         state = .locating
-        AppleScriptRunner.browserTabs { [weak self] tabs in
+        AppleScriptRunner.browserTabs { [weak self] tabs, error in
             guard let self, self.generation == token else { return }
             guard let videoID = Self.matchVideo(tabs: tabs, trackTitle: track.title) else {
-                self.state = .failed("재생 중인 YouTube 탭을 찾지 못했어요")
+                if let error, tabs.isEmpty {
+                    self.state = .failed(error)
+                } else if tabs.contains(where: { Self.videoID(from: $0.url) != nil }) {
+                    self.state = .failed("YouTube 탭이 여러 개라 재생 중인 영상을 못 골랐어요. 다른 YouTube 탭을 닫고 다시 눌러 주세요.")
+                } else {
+                    self.state = .failed("열려 있는 YouTube 영상 탭을 찾지 못했어요 (youtube.com/watch 주소여야 해요)")
+                }
                 return
             }
             self.load(videoID: videoID, token: token)

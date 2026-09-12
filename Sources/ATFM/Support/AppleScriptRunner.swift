@@ -31,11 +31,13 @@ enum AppleScriptRunner {
     }
 
     /// `URL<TAB>title` per line for every tab of every running browser we can talk to.
+    /// `error` is the first AppleScript failure (typically the Automation permission being denied).
     @MainActor
-    static func browserTabs(completion: @escaping @MainActor ([(url: String, title: String)]) -> Void) {
+    static func browserTabs(completion: @escaping @MainActor ([(url: String, title: String)], _ error: String?) -> Void) {
         let browsers = ShortsBrowser.allCases.filter(\.isRunning)
-        guard !browsers.isEmpty else { completion([]); return }
+        guard !browsers.isEmpty else { completion([], "지원하는 브라우저가 실행 중이 아니에요"); return }
         var collected: [(url: String, title: String)] = []
+        var firstError: String?
         var pending = browsers.count
         for browser in browsers {
             let titleKey = browser.isSafari ? "name of t" : "title of t"
@@ -50,14 +52,19 @@ enum AppleScriptRunner {
                 return out
             end tell
             """
-            run(script, timeout: 6) { output, _ in
+            run(script, timeout: 6) { output, error in
+                if let error, firstError == nil {
+                    firstError = error.contains("-1743") || error.lowercased().contains("not authorized")
+                        ? "\(browser.name) 제어 권한이 없어요. 시스템 설정 › 개인정보 보호 및 보안 › 자동화에서 ATFM → \(browser.name)을 켜 주세요."
+                        : "\(browser.name): \(error.prefix(120))"
+                }
                 for line in output.split(separator: "\n") {
                     let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
                     guard parts.count == 2 else { continue }
                     collected.append((url: parts[0], title: parts[1]))
                 }
                 pending -= 1
-                if pending == 0 { completion(collected) }
+                if pending == 0 { completion(collected, firstError) }
             }
         }
     }
