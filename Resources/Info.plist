@@ -26,6 +26,10 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>날짜 탭에서 캘린더 앱에 연결된 계정(학교 계정 등)의 일정을 보여주기 위해 필요합니다. 읽기만 하고 바꾸지 않습니다.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>날짜 탭에서 캘린더 앱의 일정을 보여주기 위해 필요합니다.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>미니 플레이어의 비주얼라이저가 재생 중인 소리의 크기를 읽습니다. 녹음하거나 저장하지 않습니다.</string>
 	<key>NSAppleEventsUsageDescription</key>

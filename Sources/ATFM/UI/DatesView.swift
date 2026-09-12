@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DatesView: View {
     @Bindable var store: DateStore
+    @Bindable var external: ExternalCalendarSource
     @Environment(\.colorScheme) private var scheme
     @State private var editing: DateEntry?
     @State private var showEditor = false
@@ -19,10 +20,13 @@ struct DatesView: View {
                 calendarCard
                 selectedDayCard
                 ddayCard
+                schoolCard
             }
             .padding(.bottom, 6)
         }
         .padding(.horizontal, 20)
+        .onAppear { external.refresh(around: store.visibleMonth) }
+        .onChange(of: store.visibleMonth) { _, month in external.refresh(around: month) }
         .popover(isPresented: $showEditor, arrowEdge: .top) {
             if let editing {
                 EntryEditor(entry: editing, isNew: !store.entries.contains { $0.id == editing.id }) { result in
@@ -88,7 +92,8 @@ struct DatesView: View {
                                     isToday: day == today,
                                     isSelected: day == store.selectedDay,
                                     weekday: column,
-                                    events: store.events(on: day)) {
+                                    events: store.events(on: day),
+                                    external: external.events(on: day)) {
                                 store.selectedDay = day
                             } add: {
                                 store.selectedDay = day
@@ -116,6 +121,7 @@ struct DatesView: View {
 
     private var selectedDayCard: some View {
         let events = store.events(on: store.selectedDay)
+        let schoolEvents = external.events(on: store.selectedDay)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(Self.dayTitle(store.selectedDay))
@@ -130,7 +136,7 @@ struct DatesView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.accent)
             }
-            if events.isEmpty {
+            if events.isEmpty && schoolEvents.isEmpty {
                 Text("일정 없음 · 더블클릭 또는 우클릭으로 추가")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
@@ -138,6 +144,13 @@ struct DatesView: View {
                 ForEach(events) { event in
                     EventRow(entry: event) { begin(edit: event) }
                         .contextMenu { contextMenu(for: event) }
+                }
+                ForEach(schoolEvents) { event in
+                    ExternalEventRow(event: event)
+                        .contextMenu {
+                            Button { external.openInCalendarApp(event) } label: { Label("캘린더 앱에서 열기", systemImage: "calendar") }
+                            Button { external.toggleCalendar(event.calendarID) } label: { Label("'\(event.calendarTitle)' 캘린더 숨기기", systemImage: "eye.slash") }
+                        }
                 }
             }
         }
@@ -183,6 +196,104 @@ struct DatesView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+    }
+
+    // MARK: 학교 스케줄 (macOS 캘린더 앱에서 가져오기)
+
+    private var schoolCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "graduationcap")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("학교 스케줄 보이기")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(schoolSubtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Toggle("", isOn: $external.isEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+            }
+            if external.isEnabled {
+                if external.isDenied {
+                    HStack(spacing: 8) {
+                        Text("캘린더 접근이 꺼져 있어요.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.red)
+                        Button("설정 열기") { external.openPrivacySettings() }
+                            .controlSize(.mini)
+                    }
+                    .padding(.leading, 40)
+                } else if !external.hasAccess {
+                    HStack(spacing: 8) {
+                        Text("캘린더 접근 권한이 필요해요.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Button("권한 요청") { external.requestAccess() }
+                            .controlSize(.mini)
+                    }
+                    .padding(.leading, 40)
+                } else if external.calendars.isEmpty {
+                    Text("캘린더 앱에 연결된 캘린더가 없어요. 시스템 설정 › 인터넷 계정에서 학교 계정을 추가하고 '캘린더'를 켜 주세요.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 40)
+                } else {
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(external.groupedCalendars, id: \.account) { group in
+                                HStack {
+                                    Text(group.account)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    let allOn = group.calendars.allSatisfy { external.selectedIDs.contains($0.id) }
+                                    Button(allOn ? "모두 해제" : "모두 선택") { external.selectAll(in: group.account, on: !allOn) }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Theme.accent)
+                                }
+                                .padding(.top, 4)
+                                ForEach(group.calendars) { calendar in
+                                    Toggle(isOn: Binding(get: { external.selectedIDs.contains(calendar.id) },
+                                                         set: { _ in external.toggleCalendar(calendar.id) })) {
+                                        HStack(spacing: 6) {
+                                            Circle().fill(calendar.color).frame(width: 8, height: 8)
+                                            Text(calendar.title).font(.system(size: 12)).lineLimit(1)
+                                        }
+                                    }
+                                    .toggleStyle(.checkbox)
+                                    .controlSize(.small)
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    } label: {
+                        Text("가져올 캘린더 · \(external.selectedCalendars.count)개 선택")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.leading, 40)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .card()
+    }
+
+    private var schoolSubtitle: String {
+        if !external.isEnabled { return "이 Mac의 캘린더 앱에 연결된 계정(학교 구글 계정 등)의 일정을 달력에 함께 보여줘요." }
+        let count = external.events.count
+        return count == 0 ? "이번 달 가져온 일정이 없어요. 아래에서 캘린더를 골라 보세요." : "이번 달 \(count)개 일정을 가져왔어요 (읽기 전용 · 링 모양 점)."
     }
 
     // MARK: Context menu (우클릭)
@@ -321,6 +432,7 @@ private struct DayCell: View {
     let isSelected: Bool
     let weekday: Int
     let events: [DateEntry]
+    var external: [ExternalEvent] = []
     let select: () -> Void
     let add: () -> Void
 
@@ -347,7 +459,10 @@ private struct DayCell: View {
                 ForEach(singles.prefix(3)) { event in
                     Circle().fill(event.color).frame(width: 4, height: 4)
                 }
-                if singles.count > 3 {
+                ForEach(external.prefix(max(0, 4 - min(singles.count, 3)))) { event in
+                    Circle().strokeBorder(event.color, lineWidth: 1.2).frame(width: 5, height: 5)
+                }
+                if singles.count > 3 || external.count > 4 - min(singles.count, 3) {
                     Text("+").font(.system(size: 7)).foregroundStyle(.secondary)
                 }
             }
@@ -425,6 +540,38 @@ private struct EventRow: View {
         .onTapGesture(perform: edit)
         .onHover { hovering = $0 }
         .help("클릭: 편집 · 우클릭: 더 많은 옵션")
+    }
+}
+
+private struct ExternalEventRow: View {
+    let event: ExternalEvent
+    @State private var hovering = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2).strokeBorder(event.color, lineWidth: 1.5).frame(width: 4, height: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Text(event.location.map { "\(event.calendarTitle) · \($0)" } ?? event.calendarTitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "graduationcap.fill").font(.system(size: 9)).foregroundStyle(event.color)
+            Text(event.timeText)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 8).fill(hovering ? Theme.hoverFill(scheme) : Color.clear))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .help("캘린더 앱에서 가져온 일정 · 우클릭으로 열기")
     }
 }
 

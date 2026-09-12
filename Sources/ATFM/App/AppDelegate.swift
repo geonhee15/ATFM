@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let calculator = CalculatorModel()
     private let translator = TranslatorModel()
     private let timers = TimerCenter()
+    private let externalCalendar = ExternalCalendarSource()
     private let nowPlaying = NowPlayingMonitor()
     private var miniPlayer: MiniPlayerController?
 
@@ -92,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, dictionary: dictionary,
+                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, externalCalendar: externalCalendar, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer,
@@ -189,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if env["ATFM_DEBUG_EXTCAL"] == "1" { externalCalendar.isEnabled = true }
         if let expr = env["ATFM_DEBUG_CALC"] { calculator.input = expr }
         if let text = env["ATFM_DEBUG_TRANSLATE"] {
             translator.sourceText = text
