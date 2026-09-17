@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UniformTypeIdentifiers
 import UserNotifications
 
 /// Stopwatch + countdown timer. Time is derived from Dates so it keeps running while the bubble is
@@ -55,6 +56,18 @@ final class TimerCenter {
     }
     private(set) var menuBarText: String?
     private(set) var notificationsAllowed: Bool?
+    /// System sound name ("Glass"…) or "custom" for a user file.
+    var soundName: String {
+        didSet { UserDefaults.standard.set(soundName, forKey: Self.soundKey) }
+    }
+    var customSoundPath: String? {
+        didSet { UserDefaults.standard.set(customSoundPath, forKey: Self.soundPathKey) }
+    }
+    var soundRepeat: Int {
+        didSet { UserDefaults.standard.set(soundRepeat, forKey: Self.soundRepeatKey) }
+    }
+    static let systemSounds = ["Glass", "Ping", "Purr", "Tink", "Pop", "Hero", "Submarine", "Sosumi", "Blow", "Bottle", "Frog", "Funk", "Morse", "Basso"]
+    @ObservationIgnored private var previewSound: NSSound?
 
     /// Shown at the top edge when the countdown ends (AppDelegate wires this to the HUD).
     @ObservationIgnored var onFinished: ((String) -> Void)?
@@ -63,12 +76,62 @@ final class TimerCenter {
 
     private static let durationKey = "timerDuration"
     private static let menuBarKey = "timerMenuBar"
+    private static let soundKey = "timerSound"
+    private static let soundPathKey = "timerSoundPath"
+    private static let soundRepeatKey = "timerSoundRepeat"
     static let presets: [Int] = [1, 3, 5, 10, 15, 25, 30, 60]   // minutes
 
     init() {
         let stored = UserDefaults.standard.double(forKey: Self.durationKey)
         duration = stored > 0 ? stored : 300
         showInMenuBar = UserDefaults.standard.object(forKey: Self.menuBarKey) as? Bool ?? true
+        soundName = UserDefaults.standard.string(forKey: Self.soundKey) ?? "Glass"
+        customSoundPath = UserDefaults.standard.string(forKey: Self.soundPathKey)
+        let storedRepeat = UserDefaults.standard.integer(forKey: Self.soundRepeatKey)
+        soundRepeat = (1...5).contains(storedRepeat) ? storedRepeat : 2
+    }
+
+    /// The configured finish sound (falls back to Glass when a custom file is missing).
+    private func makeSound() -> NSSound? {
+        if soundName == "custom", let path = customSoundPath, let sound = NSSound(contentsOfFile: path, byReference: true) { return sound }
+        return NSSound(named: NSSound.Name(soundName == "custom" ? "Glass" : soundName))
+    }
+
+    func playFinishSound() {
+        guard let sound = makeSound() else { return }
+        previewSound?.stop()
+        previewSound = sound
+        sound.play()
+        let interval = max(0.9, sound.duration + 0.15)
+        for index in 1..<max(1, soundRepeat) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(index)) { [weak self] in
+                MainActor.assumeIsolated { self?.previewSound?.stop(); self?.previewSound?.play() }
+            }
+        }
+    }
+
+    func previewSoundOnce() {
+        previewSound?.stop()
+        previewSound = makeSound()
+        previewSound?.play()
+    }
+
+    func chooseCustomSound() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "타이머 종료 소리로 쓸 오디오 파일을 고르세요"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            customSoundPath = url.path
+            soundName = "custom"
+            previewSoundOnce()
+        }
+    }
+
+    var customSoundLabel: String {
+        customSoundPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "파일 없음"
     }
 
     var timerRunning: Bool { endsAt != nil }
@@ -149,8 +212,7 @@ final class TimerCenter {
         finishTimer = nil
         stopTicking()
         refreshMenuBar()
-        NSSound(named: "Glass")?.play()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { NSSound(named: "Glass")?.play() }
+        playFinishSound()
         let label = Self.format(total, showFraction: false)
         onFinished?("타이머 종료 · \(label)")
         postNotification(label: label)

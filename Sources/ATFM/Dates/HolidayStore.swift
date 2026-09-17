@@ -97,6 +97,22 @@ final class HolidayStore {
 
     var activeCountries: [HolidayCountry] { HolidayCountry.all.filter { countries.contains($0.code) } }
 
+    /// Keyword search across everything currently enabled (this year ± 1).
+    func searchAll(_ needle: String) -> [Holiday] {
+        guard !needle.isEmpty else { return [] }
+        let start = Calendar.current.startOfDay(for: Date())
+        var pool: [Holiday] = []
+        if showKorean, let list = loaded["kr"] { pool += list.filter { $0.isPublic || showKoreanObservances } }
+        for code in countries.sorted() { if let list = loaded[code] { pool += list.filter(\.isPublic) } }
+        if showInternationalDays, let list = loaded["intl"] { pool += list }
+        let hits = pool.filter { $0.title.lowercased().contains(needle) }
+        return hits.sorted { a, b in
+            let aFuture = a.date >= start, bFuture = b.date >= start
+            if aFuture != bFuture { return aFuture }
+            return aFuture ? a.date < b.date : a.date > b.date
+        }
+    }
+
     func toggleCountry(_ code: String) {
         if countries.contains(code) { countries.remove(code) } else { countries.insert(code); ensureLoaded(code) }
         UserDefaults.standard.set(Array(countries).sorted(), forKey: Self.countriesKey)

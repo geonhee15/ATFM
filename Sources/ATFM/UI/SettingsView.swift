@@ -75,10 +75,54 @@ struct SettingsView: View {
     }
 
     private var infoCard: some View {
-        SettingsRow(title: "ATFM", subtitle: "Additional Things For Mac · v\(appVersion)") {
-            Image(systemName: "sparkles").foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 22, weight: .semibold))
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.accent.opacity(0.14)))
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ATFM · Additional Things For Mac")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("v\(appVersion) · Swift · AppKit + SwiftUI · macOS 14+")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 4) {
+                aboutLine("개발자", "geonhee15 (Geonhee Kim)")
+                aboutLine("소개", "맥에 있었으면 했던 기능들을 메뉴 막대 앱 하나에 모으는 개인 프로젝트")
+                aboutLine("소스", "github.com/geonhee15/ATFM · 오픈 소스")
+                aboutLine("만든 도구", "Claude Fable 5.1과 함께 개발 · yt-dlp · ffmpeg · LRCLIB · Gemini API")
+            }
+            HStack(spacing: 8) {
+                Button { open("https://github.com/geonhee15/ATFM") } label: { Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right") }
+                Button { open("https://github.com/geonhee15/ATFM/issues/new") } label: { Label("피드백 남기기", systemImage: "exclamationmark.bubble") }
+                Button { open("https://github.com/geonhee15") } label: { Label("개발자 프로필", systemImage: "person.crop.circle") }
+                Spacer()
+            }
+            .controlSize(.small)
+            Text("© 2026 geonhee15")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .card()
+    }
+
+    private func aboutLine(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 60, alignment: .leading)
+            Text(value).font(.system(size: 11)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func open(_ url: String) {
+        if let link = URL(string: url) { NSWorkspace.shared.open(link) }
     }
 
     // MARK: Rows

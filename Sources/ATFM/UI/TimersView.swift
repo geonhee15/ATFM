@@ -124,6 +124,7 @@ struct TimersView: View {
                 if !timers.timerRunning && !timers.timerPaused {
                     durationCard
                 }
+                soundCard
                 ActionRow(icon: "menubar.rectangle", title: "메뉴 막대에 남은 시간 표시",
                           subtitle: "타이머가 돌 때 ATFM 아이콘 옆에 남은 시간이 보여요.") {
                     Toggle("", isOn: $timers.showInMenuBar)
@@ -145,6 +146,54 @@ struct TimersView: View {
         if timers.timerRunning { return "일시정지" }
         if timers.timerPaused { return "계속" }
         return "시작"
+    }
+
+    private var soundCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("종료 소리")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    timers.previewSoundOnce()
+                } label: {
+                    Label("미리 듣기", systemImage: "play.circle").font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accent)
+            }
+            HStack(spacing: 8) {
+                Picker("", selection: Binding(get: { timers.soundName }, set: { name in
+                    if name == "custom" {
+                        if timers.customSoundPath == nil { timers.chooseCustomSound() } else { timers.soundName = "custom" }
+                    } else {
+                        timers.soundName = name
+                        timers.previewSoundOnce()
+                    }
+                })) {
+                    ForEach(TimerCenter.systemSounds, id: \.self) { name in Text(name).tag(name) }
+                    Divider()
+                    Text(timers.customSoundPath == nil ? "사용자 파일…" : "파일: \(timers.customSoundLabel)").tag("custom")
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                if timers.soundName == "custom" {
+                    Button("파일 바꾸기") { timers.chooseCustomSound() }
+                        .controlSize(.small)
+                }
+                Spacer()
+                Text("\(timers.soundRepeat)번")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
+                Stepper("", value: Binding(get: { timers.soundRepeat }, set: { timers.soundRepeat = min(5, max(1, $0)) }), in: 1...5)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .help("종료 시 반복 재생 횟수")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .card()
     }
 
     private var durationCard: some View {

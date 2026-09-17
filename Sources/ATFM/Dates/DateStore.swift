@@ -189,6 +189,35 @@ final class DateStore {
         scheduleSave()
     }
 
+    // MARK: Search
+
+    struct SearchHit: Identifiable {
+        let entry: DateEntry
+        let date: Date           // the occurrence to jump to
+        var id: UUID { entry.id }
+    }
+
+    /// Keyword match on title / note; repeating entries report their next occurrence.
+    func search(_ query: String, today: Date = Date()) -> [SearchHit] {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return [] }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: today)
+        return entries.filter { $0.title.lowercased().contains(needle) || $0.note.lowercased().contains(needle) }
+            .map { SearchHit(entry: $0, date: Self.nextOccurrence(of: $0, from: start, calendar: calendar)) }
+            .sorted { a, b in
+                let aFuture = a.date >= start, bFuture = b.date >= start
+                if aFuture != bFuture { return aFuture }
+                return aFuture ? a.date < b.date : a.date > b.date
+            }
+    }
+
+    func jump(to date: Date) {
+        let day = Calendar.current.startOfDay(for: date)
+        selectedDay = day
+        visibleMonth = day
+    }
+
     // MARK: Calendar queries
 
     func events(on day: Date) -> [DateEntry] {

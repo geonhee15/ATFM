@@ -213,6 +213,8 @@ final class ChecklistStore {
         var changed = false
         for index in items.indices where !items[index].isArchived && items[index].createdAt < todayStart {
             if carryOverUnfinished && !items[index].isDone { continue }
+            // An unfinished task with a deadline still ahead (today or later) stays on the list until it's due.
+            if !items[index].isDone, let due = items[index].dueAt, due >= todayStart { continue }
             items[index].archiveDay = Self.dayString(for: items[index].createdAt)
             items[index].archivedAt = Date()
             changed = true

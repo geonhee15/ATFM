@@ -7,6 +7,7 @@ struct DatesView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var editing: DateEntry?
     @State private var showEditor = false
+    @State private var query = ""
 
     var body: some View {
         ScrollView {
@@ -16,6 +17,10 @@ struct DatesView: View {
                     EntryEditor(entry: DateEntry(title: "제주 여행", year: 2026, month: 9, day: 21, colorIndex: 3, showsInDday: true),
                                 isNew: true) { _ in }
                         .card()
+                }
+                searchBar
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    searchResults
                 }
                 ClockCard()
                 calendarCard
@@ -27,7 +32,10 @@ struct DatesView: View {
             .padding(.bottom, 6)
         }
         .padding(.horizontal, 20)
-        .onAppear { external.refresh(around: store.visibleMonth) }
+        .onAppear {
+            external.refresh(around: store.visibleMonth)
+            if let q = UserDefaults.standard.string(forKey: "debugDatesSearch"), !q.isEmpty { query = q }
+        }
         .onChange(of: store.visibleMonth) { _, month in external.refresh(around: month) }
         .popover(isPresented: $showEditor, arrowEdge: .top) {
             if let editing {
@@ -55,6 +63,75 @@ struct DatesView: View {
                 .foregroundStyle(Theme.accent)
         }
         .padding(.horizontal, 2)
+    }
+
+    // MARK: Search
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("일정 · 기념일 · 학교 일정 · 공휴일 검색", text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .card()
+    }
+
+    private var searchResults: some View {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let hits = store.search(query)
+        let school = external.events.filter { $0.title.lowercased().contains(needle) || ($0.location?.lowercased().contains(needle) ?? false) }
+            .sorted { $0.start < $1.start }
+        let holidayHits = holidays.searchAll(needle)
+        let f: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR"); f.dateFormat = "M월 d일 (E)"; return f }()
+        let total = hits.count + school.count + holidayHits.count
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(total == 0 ? "결과 없음" : "결과 \(total)개 · 클릭하면 그 날짜로")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 4)
+            ForEach(hits.prefix(20)) { hit in
+                resultRow(color: hit.entry.color, title: hit.entry.title, date: f.string(from: hit.date),
+                          tag: hit.entry.showsInDday && !hit.entry.showsInCalendar ? "D-day" : (hit.entry.repeatRule == .none ? "일정" : hit.entry.repeatRule.title)) {
+                    store.jump(to: hit.date)
+                }
+            }
+            ForEach(school.prefix(10)) { event in
+                resultRow(color: event.color, title: event.title, date: f.string(from: event.start), tag: "학교") { store.jump(to: event.start) }
+            }
+            ForEach(holidayHits.prefix(10)) { holiday in
+                resultRow(color: .red, title: "\(holiday.flag) \(holiday.title)", date: f.string(from: holiday.date), tag: holiday.isPublic ? "공휴일" : "기념일") {
+                    store.jump(to: holiday.date)
+                }
+            }
+            Spacer().frame(height: 6)
+        }
+        .card()
+    }
+
+    private func resultRow(color: Color, title: String, date: String, tag: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4, height: 16)
+                Text(title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Spacer()
+                Text(tag).font(.system(size: 9)).foregroundStyle(.tertiary)
+                Text(date).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Calendar

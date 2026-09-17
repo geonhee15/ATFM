@@ -539,6 +539,7 @@ private struct ElementDetailCard: View {
                 row("녹는점 · 끓는점", "\(element.melt.map(PeriodicTable.kelvinToCelsius) ?? "–") · \(element.boil.map(PeriodicTable.kelvinToCelsius) ?? "–")")
                 row("발견", element.found ?? "–")
             }
+            compoundsRow
             HStack {
                 Spacer()
                 Button {
@@ -563,5 +564,39 @@ private struct ElementDetailCard: View {
             Text(value).font(.system(size: 12)).textSelection(.enabled)
             Spacer(minLength: 0)
         }
+    }
+
+    @ViewBuilder
+    private var compoundsRow: some View {
+        let compounds = ElementCompounds.compounds(for: element.sym)
+        VStack(alignment: .leading, spacing: 5) {
+            Text("대표 화합물")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            if compounds.isEmpty {
+                Text("알려진 화합물이 없어요 (수명이 매우 짧은 합성 원소)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            } else {
+                HStack(spacing: 6) {
+                    ForEach(compounds) { compound in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(compound.formula)
+                                .font(.system(size: 13, weight: .semibold))
+                                .textSelection(.enabled)
+                            Text(compound.name)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(element.cat.color.opacity(0.18)))
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 }

@@ -221,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        if let q = env["ATFM_DEBUG_DATES_SEARCH"] { UserDefaults.standard.set(q, forKey: "debugDatesSearch") } else { UserDefaults.standard.removeObject(forKey: "debugDatesSearch") }
         if let day = env["ATFM_DEBUG_DATES_SELECT"] {   // "2026-09-25": select a day in the 날짜 tab
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
             if let date = f.date(from: day) { dates.selectedDay = Calendar.current.startOfDay(for: date); dates.visibleMonth = dates.selectedDay }
