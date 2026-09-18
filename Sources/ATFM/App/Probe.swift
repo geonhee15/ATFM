@@ -289,6 +289,41 @@ enum Probe {
                     let r = ChatLayoutAnalyzer.cluster(lines, windowHeight: 600, composerHeight: 96, recentCount: n)
                     print("recent=\(n): messages=\(r.messageCount) clear=\(Int(r.clearHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
                 }
+            } else if what == "browser" {
+                let running = ShortsBrowser.allCases.filter(\.isRunning)
+                print("running browsers: \(running.map(\.rawValue))")
+                var pending = running.count
+                for browser in running {
+                    AppleScriptRunner.run(ChatPrivacyMode.frontTabScript(bundle: browser.rawValue), timeout: 5) { output, error in
+                        let url = output.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        let hit = PrivacyTarget.googleChatURLs.contains { url.contains($0) }
+                        print("  \(browser.rawValue): \(error ?? "ok") front tab is Google Chat: \(hit) (url length \(url.count))")
+                        pending -= 1
+                    }
+                }
+                while pending > 0 { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }   // completions land on the main actor
+            } else if what == "windows" {
+                // Layer-0 windows of running messenger/browser apps. Titles are masked unless they are just the app's name.
+                let info = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]) ?? []
+                let apps = NSWorkspace.shared.runningApplications.filter { app in
+                    PrivacyTarget.presets.contains { $0.matches(bundle: app.bundleIdentifier ?? "", appName: app.localizedName) }
+                }
+                for app in apps {
+                    print("\(app.localizedName ?? "?") pid \(app.processIdentifier) \(app.bundleIdentifier ?? "")")
+                    for entry in info where (entry[kCGWindowOwnerPID as String] as? pid_t) == app.processIdentifier {
+                        let layer = entry[kCGWindowLayer as String] as? Int ?? -1
+                        let bounds = (entry[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) } ?? .zero
+                        let title = entry[kCGWindowName as String] as? String
+                        let shown: String
+                        if let title {
+                            let plain = title.trimmingCharacters(in: .whitespaces)
+                            let appName = app.localizedName ?? ""
+                            let generic = ["카카오톡", "KakaoTalk", appName, "", "Google Chrome", "Safari"].contains(plain)
+                            shown = generic ? "\"\(plain)\"" : "<masked \(plain.count) chars, ends with \(plain.suffix(16).contains("Chrome") || plain.suffix(16).contains("Gmail") || plain.suffix(16).contains("Google Chat") ? String(plain.suffix(16)) : "…")>"
+                        } else { shown = "(no title)" }
+                        print("  #\(entry[kCGWindowNumber as String] as? Int ?? 0) layer \(layer) \(Int(bounds.width))x\(Int(bounds.height)) alpha \(entry[kCGWindowAlpha as String] as? Double ?? 1) \(shown)")
+                    }
+                }
             } else if let id = UInt32(what), let image = CGWindowListCreateImage(.null, .optionIncludingWindow, id, [.boundsIgnoreFraming, .nominalResolution]) {
                 let height = CGFloat(image.height)
                 if let r = ChatLayoutAnalyzer.analyze(image, windowHeight: height, composerHeight: 110, recentCount: 2) {

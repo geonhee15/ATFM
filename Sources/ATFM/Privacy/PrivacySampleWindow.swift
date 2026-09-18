@@ -8,7 +8,7 @@ enum PrivacySampleWindow {
 
     static func target() -> PrivacyTarget {
         PrivacyTarget(id: "debug:self", bundleID: Bundle.main.bundleIdentifier ?? "com.geonhee.atfm", name: "ATFM 샘플", nameHint: nil,
-                      titleKeyword: titleKeyword, topInset: 0, composerHeight: 96, enabled: true, isPreset: false)
+                      titleKeyword: titleKeyword, urlKeywords: nil, excludedTitles: nil, topInset: 0, composerHeight: 96, enabled: true, isPreset: false)
     }
 
     @discardableResult

@@ -168,7 +168,9 @@ private struct TargetRow: View {
 
     private var detail: String {
         var parts: [String] = []
-        if let keyword = target.titleKeyword, !keyword.isEmpty { parts.append("창 제목에 '\(keyword)'") }
+        if let urls = target.urlKeywords, !urls.isEmpty { parts.append("탭 주소 \(urls.first ?? "")") }
+        else if let keyword = target.titleKeyword, !keyword.isEmpty { parts.append("창 제목에 '\(keyword)'") }
+        if let excluded = target.excludedTitles, !excluded.isEmpty { parts.append("채팅방 창만") }
         if target.topInset > 0 { parts.append("위 \(Int(target.topInset))px 제외") }
         parts.append("입력창 \(Int(target.composerHeight))px")
         return parts.joined(separator: " · ")
@@ -187,6 +189,18 @@ private struct TargetEditor: View {
                 Text("창 제목 조건 (비우면 모든 창)").font(.system(size: 11)).foregroundStyle(.secondary)
                 TextField("예: Google Chat", text: Binding(get: { target.titleKeyword ?? "" }, set: { target.titleKeyword = $0.isEmpty ? nil : $0 }))
                     .textFieldStyle(.roundedBorder).controlSize(.small)
+            }
+            if target.supportsURLCheck || target.urlKeywords != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("앞 탭 주소에 포함 (쉼표로 여러 개, 비우면 안 씀)").font(.system(size: 11)).foregroundStyle(.secondary)
+                    TextField("예: chat.google.com, mail.google.com/chat",
+                              text: Binding(get: { (target.urlKeywords ?? []).joined(separator: ", ") },
+                                            set: { text in
+                                                let parts = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                                                target.urlKeywords = parts.isEmpty ? nil : parts
+                                            }))
+                        .textFieldStyle(.roundedBorder).controlSize(.small)
+                }
             }
             stepper("위쪽 여백 (툴바 등, 가리지 않음)", value: $target.topInset, range: 0...200, step: 4)
             stepper("입력창 높이 (아래에서, 가리지 않음)", value: $target.composerHeight, range: 40...300, step: 10)

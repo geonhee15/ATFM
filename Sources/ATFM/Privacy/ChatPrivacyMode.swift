@@ -8,6 +8,8 @@ struct PrivacyTarget: Codable, Identifiable, Equatable {
     var name: String
     var nameHint: String?           // running app's name must contain this (for "*" bundle ids)
     var titleKeyword: String?       // only windows whose title contains this (browser tabs)
+    var urlKeywords: [String]?      // browsers: the front tab's URL must contain one of these (checked via AppleScript)
+    var excludedTitles: [String]?   // windows with exactly these titles are never covered (e.g. KakaoTalk's main window)
     var topInset: Double            // points at the top of the window left uncovered (toolbar)
     var composerHeight: Double      // bottom strip treated as the message composer
     var enabled: Bool
@@ -42,6 +44,20 @@ struct PrivacyTarget: Codable, Identifiable, Equatable {
         return items.map { ($0 as NSString).deletingPathExtension }
     }
 
+    /// Browsers we can ask for the front tab's URL (Chromium family + Safari + Arc).
+    var supportsURLCheck: Bool { ShortsBrowser(rawValue: bundleID) != nil }
+    var needsWindowFilter: Bool { (titleKeyword?.isEmpty == false) || !(urlKeywords ?? []).isEmpty }
+
+    /// Copies preset-defined behaviour onto a stored copy while keeping the user's own edits.
+    func refreshed(from preset: PrivacyTarget) -> PrivacyTarget {
+        var copy = preset
+        copy.enabled = enabled
+        copy.topInset = topInset
+        copy.composerHeight = composerHeight
+        copy.titleKeyword = titleKeyword
+        return copy
+    }
+
     var appIconPath: String? {
         if bundleID.hasSuffix("*") {
             return NSWorkspace.shared.runningApplications.first { app in
@@ -53,20 +69,30 @@ struct PrivacyTarget: Codable, Identifiable, Equatable {
     }
 
     static let presets: [PrivacyTarget] = [
-        PrivacyTarget(id: "preset:kakao", bundleID: "com.kakao.KakaoTalkMac", name: "카카오톡", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 130, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:gchat-app", bundleID: "com.google.Chrome.app.*", name: "Google Chat (앱)", nameHint: "Google Chat", titleKeyword: nil, topInset: 0, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:gchat-chrome", bundleID: "com.google.Chrome", name: "Google Chat (Chrome 탭)", nameHint: nil, titleKeyword: "Google Chat", topInset: 86, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:gchat-safari", bundleID: "com.apple.Safari", name: "Google Chat (Safari 탭)", nameHint: nil, titleKeyword: "Google Chat", topInset: 52, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:gchat-arc", bundleID: "company.thebrowser.Browser", name: "Google Chat (Arc 탭)", nameHint: nil, titleKeyword: "Google Chat", topInset: 36, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:gchat-firefox", bundleID: "org.mozilla.firefox", name: "Google Chat (Firefox 탭)", nameHint: nil, titleKeyword: "Google Chat", topInset: 80, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:gchat-edge", bundleID: "com.microsoft.edgemac", name: "Google Chat (Edge 탭)", nameHint: nil, titleKeyword: "Google Chat", topInset: 86, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:slack", bundleID: "com.tinyspeck.slackmacgap", name: "Slack", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 120, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:discord", bundleID: "com.hnc.Discord", name: "Discord", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 90, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:telegram", bundleID: "ru.keepcoder.Telegram", name: "Telegram", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 70, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:whatsapp", bundleID: "net.whatsapp.WhatsApp", name: "WhatsApp", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 80, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:messages", bundleID: "com.apple.MobileSMS", name: "메시지", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 64, enabled: true, isPreset: true),
-        PrivacyTarget(id: "preset:line", bundleID: "jp.naver.line.mac", name: "LINE", nameHint: nil, titleKeyword: nil, topInset: 0, composerHeight: 120, enabled: true, isPreset: true),
+        preset("kakao", "com.kakao.KakaoTalkMac", "카카오톡", composer: 130, excluded: ["카카오톡", "KakaoTalk"]),
+        preset("gchat-app", "com.google.Chrome.app.*", "Google Chat (앱)", nameHint: "Google Chat", composer: 120),
+        preset("gchat-chrome", "com.google.Chrome", "Google Chat (Chrome 탭)", top: 86, composer: 120, chatTab: true),
+        preset("gchat-safari", "com.apple.Safari", "Google Chat (Safari 탭)", top: 52, composer: 120, chatTab: true),
+        preset("gchat-arc", "company.thebrowser.Browser", "Google Chat (Arc 탭)", top: 36, composer: 120, chatTab: true),
+        preset("gchat-firefox", "org.mozilla.firefox", "Google Chat (Firefox 탭)", top: 80, composer: 120, chatTab: true),
+        preset("gchat-edge", "com.microsoft.edgemac", "Google Chat (Edge 탭)", top: 86, composer: 120, chatTab: true),
+        preset("gchat-brave", "com.brave.Browser", "Google Chat (Brave 탭)", top: 86, composer: 120, chatTab: true),
+        preset("slack", "com.tinyspeck.slackmacgap", "Slack", composer: 120),
+        preset("discord", "com.hnc.Discord", "Discord", composer: 90),
+        preset("telegram", "ru.keepcoder.Telegram", "Telegram", composer: 70),
+        preset("whatsapp", "net.whatsapp.WhatsApp", "WhatsApp", composer: 80),
+        preset("messages", "com.apple.MobileSMS", "메시지", composer: 64),
+        preset("line", "jp.naver.line.mac", "LINE", composer: 120),
     ]
+
+    static let googleChatURLs = ["chat.google.com", "mail.google.com/chat"]
+
+    private static func preset(_ key: String, _ bundle: String, _ name: String, nameHint: String? = nil, top: Double = 0, composer: Double,
+                               chatTab: Bool = false, excluded: [String]? = nil) -> PrivacyTarget {
+        PrivacyTarget(id: "preset:\(key)", bundleID: bundle, name: name, nameHint: nameHint,
+                      titleKeyword: chatTab ? "Google Chat" : nil, urlKeywords: chatTab ? googleChatURLs : nil, excludedTitles: excluded,
+                      topInset: top, composerHeight: composer, enabled: true, isPreset: true)
+    }
 }
 
 /// 채팅 프라이버시: while a chosen messenger is the front app, a glass sheet covers its chat history
@@ -112,8 +138,12 @@ final class ChatPrivacyMode {
         if let data = defaults.data(forKey: Self.targetsKey), let decoded = try? JSONDecoder().decode([PrivacyTarget].self, from: data) {
             loaded = decoded
         }
-        for preset in PrivacyTarget.presets where !loaded.contains(where: { $0.id == preset.id }) {
-            loaded.append(preset)
+        for preset in PrivacyTarget.presets {
+            if let index = loaded.firstIndex(where: { $0.id == preset.id }) {
+                loaded[index] = loaded[index].refreshed(from: preset)
+            } else {
+                loaded.append(preset)
+            }
         }
         targets = loaded
         overlay.tone = tone
@@ -133,17 +163,29 @@ final class ChatPrivacyMode {
 
     func start() {
         guard isEnabled, timer == nil else { return }
-        let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
+        schedule(interval: Self.idleInterval)
+        tick()
+    }
+
+    private static let idleInterval: TimeInterval = 0.15
+    private static let followInterval: TimeInterval = 1.0 / 60.0   // smooth tracking while a window is covered
+    @ObservationIgnored private var timerInterval: TimeInterval = 0
+
+    private func schedule(interval: TimeInterval) {
+        guard interval != timerInterval else { return }
+        timer?.invalidate()
+        timerInterval = interval
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
-        tick()
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        timerInterval = 0
         overlay.hide()
         currentWindowID = 0
         activeName = nil
@@ -179,7 +221,7 @@ final class ChatPrivacyMode {
         let id = "custom:\(bundle)"
         guard !targets.contains(where: { $0.id == id }) else { return }
         targets.append(PrivacyTarget(id: id, bundleID: bundle, name: app.localizedName ?? bundle, nameHint: nil, titleKeyword: nil,
-                                     topInset: 0, composerHeight: 110, enabled: true, isPreset: false))
+                                     urlKeywords: nil, excludedTitles: nil, topInset: 0, composerHeight: 110, enabled: true, isPreset: false))
         saveTargets()
     }
 
@@ -216,13 +258,19 @@ final class ChatPrivacyMode {
         guard isEnabled else { return }
         guard let app = NSWorkspace.shared.frontmostApplication, let bundle = app.bundleIdentifier,
               debugAllowSelf || app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
-              let target = targets.first(where: { $0.enabled && $0.matches(bundle: bundle, appName: app.localizedName) }),
-              let window = frontWindow(of: app.processIdentifier, titleKeyword: target.titleKeyword) else {
-            if activeName != nil { activeName = nil }
-            overlay.hide()
-            currentWindowID = 0
+              let target = targets.first(where: { $0.enabled && $0.matches(bundle: bundle, appName: app.localizedName) }) else {
+            release()
             return
         }
+        if let keywords = target.urlKeywords, !keywords.isEmpty, target.supportsURLCheck {
+            pollFrontTabURL(of: target)
+        }
+        guard let window = frontWindow(of: app.processIdentifier, target: target) else {
+            if activeName != nil || debugAllowSelf { debugLog?("no front window for \(target.name) (pid \(app.processIdentifier))") }
+            release()
+            return
+        }
+        schedule(interval: Self.followInterval)
         if window.id != currentWindowID {
             currentWindowID = window.id
             currentClear = Double(target.composerHeight) + 150
@@ -235,7 +283,16 @@ final class ChatPrivacyMode {
         }
     }
 
-    private func frontWindow(of pid: pid_t, titleKeyword: String?) -> FrontWindow? {
+    private func release() {
+        if activeName != nil { activeName = nil }
+        overlay.hide()
+        currentWindowID = 0
+        schedule(interval: Self.idleInterval)
+    }
+
+    /// The app's front window — only that one is ever covered. Returns nil when it is excluded
+    /// (KakaoTalk's friend list) or, for browsers, when neither the title nor the front tab URL match.
+    private func frontWindow(of pid: pid_t, target: PrivacyTarget) -> FrontWindow? {
         guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let overlayNumber = CGWindowID(max(0, overlay.windowNumber))
@@ -247,14 +304,66 @@ final class ChatPrivacyMode {
                   let boundsDict = entry[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsDict),
                   bounds.width >= 240, bounds.height >= 160 else { continue }
-            let title = entry[kCGWindowName as String] as? String
-            if let keyword = titleKeyword, !keyword.isEmpty {
-                guard let title, title.localizedCaseInsensitiveContains(keyword) else { continue }
+            let title = (entry[kCGWindowName as String] as? String)?.trimmingCharacters(in: .whitespaces)
+            if let excluded = target.excludedTitles, let title, excluded.contains(where: { $0.caseInsensitiveCompare(title) == .orderedSame }) {
+                debugLog?("front window #\(number) excluded by title")
+                return nil
+            }
+            if target.needsWindowFilter {
+                let titleOK = target.titleKeyword.map { keyword in !keyword.isEmpty && (title?.localizedCaseInsensitiveContains(keyword) ?? false) } ?? false
+                guard titleOK || frontTabMatches(target) else {
+                    debugLog?("front window #\(number) \(Int(bounds.width))x\(Int(bounds.height)) title(\(title?.count ?? -1) chars) fails filter")
+                    return nil
+                }
             }
             let frame = NSRect(x: bounds.minX, y: primaryHeight - bounds.maxY, width: bounds.width, height: bounds.height)
             return FrontWindow(id: number, frame: frame, title: title)
         }
         return nil
+    }
+
+    // MARK: Browser front-tab URL (AppleScript, needs the Automation permission once)
+
+    @ObservationIgnored private var tabURL = ""
+    @ObservationIgnored private var tabURLBundle = ""
+    @ObservationIgnored private var tabURLTime = Date.distantPast
+    @ObservationIgnored private var tabProbeInFlight = false
+    @ObservationIgnored private var tabProbeStarted = Date.distantPast
+
+    private func frontTabMatches(_ target: PrivacyTarget) -> Bool {
+        guard let keywords = target.urlKeywords, tabURLBundle == target.bundleID,
+              Date().timeIntervalSince(tabURLTime) < 4 else { return false }
+        let url = tabURL.lowercased()
+        return keywords.contains { url.contains($0.lowercased()) }
+    }
+
+    private func pollFrontTabURL(of target: PrivacyTarget) {
+        guard !tabProbeInFlight, Date().timeIntervalSince(tabProbeStarted) > 0.7 else { return }
+        tabProbeInFlight = true
+        tabProbeStarted = Date()
+        let bundle = target.bundleID
+        AppleScriptRunner.run(Self.frontTabScript(bundle: bundle), timeout: 3) { [weak self] output, error in
+            guard let self else { return }
+            self.tabProbeInFlight = false
+            if let error {
+                if error.contains("-1743") || error.contains("not allowed") || error.contains("허용") {
+                    self.lastError = "브라우저 탭 주소를 읽으려면 시스템 설정 › 개인정보 보호 › 자동화에서 ATFM → \(target.name.components(separatedBy: " (").first ?? "브라우저") 허용"
+                }
+                self.tabURL = ""
+                return
+            }
+            self.tabURL = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.tabURLBundle = bundle
+            self.tabURLTime = Date()
+            if self.lastError?.contains("자동화") == true { self.lastError = nil }
+        }
+    }
+
+    static func frontTabScript(bundle: String) -> String {
+        if bundle == "com.apple.Safari" {
+            return "tell application id \"\(bundle)\" to if (count of windows) > 0 then get URL of current tab of front window"
+        }
+        return "tell application id \"\(bundle)\" to if (count of windows) > 0 then get URL of active tab of front window"
     }
 
     private func analyze(window: FrontWindow, target: PrivacyTarget) {

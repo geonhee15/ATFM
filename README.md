@@ -160,9 +160,12 @@
     앱도 하나로 묶고, 앱을 다시 켜도 기억(`appVolumes`). 시스템 오디오 녹음 권한 사용
 - **채팅 프라이버시** 탭
   - 고른 메신저(카카오톡 · Google Chat 앱/브라우저 탭 · Slack · Discord · Telegram · WhatsApp · 메시지 · LINE, 실행 중인 다른 앱도 추가)가
-    맨 앞에 있을 때 그 창의 채팅 기록 위에 **유리판**을 띄워 흐리게. 가장 최근 N개(기본 2개) 메시지와 지금 쓰는 입력창은 그대로 보임
+    맨 앞에 있을 때 그 앱의 **맨 앞 창** 채팅 기록 위에 **유리판**을 띄워 흐리게. 가장 최근 N개(기본 2개) 메시지와 지금 쓰는 입력창은 그대로 보임.
+    카카오톡은 친구/채팅 목록(메인 창)은 두고 채팅방 창만 가림
+  - Google Chat 브라우저 탭은 창 제목 또는 **앞 탭 주소**(chat.google.com · mail.google.com/chat, AppleScript로 0.7초마다 확인 —
+    자동 스크롤과 같은 자동화 권한)로 알아봄. 다른 탭으로 가면 바로 걷힘
   - 메시지 위치는 창 이미지를 Vision 텍스트 사각형 감지로 훑어 줄 사이 간격으로 묶어서 찾음(글자를 읽지는 않음). 0.5초마다 다시 계산하고
-    창을 옮기거나 크기를 바꿔도 따라감. 입력창 높이·위쪽 툴바 여백·창 제목 조건(브라우저 탭용)은 앱마다 조절
+    창을 옮기거나 크기를 바꾸면 초당 60번 따라감. 입력창 높이·위쪽 툴바 여백·창 제목/주소 조건은 앱마다 조절
   - macOS 26에서는 진짜 Liquid Glass(`NSGlassEffectView`), 그 아래는 뒷창을 흐리는 비브런시 + 아래쪽 페이드. 클릭·스크롤은 유리판을
     통과하고, 톤(자동/밝게/어둡게) 선택
   - 전역 단축키 **⌘⌥⇧B**로 켜고 끄기(패널에서 바꾸기·기본값 복원, 상단 팝업으로 상태 표시). 창 제목 조건은 화면 기록 권한이 있어야 읽힘
@@ -241,7 +244,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari\|reels\|reels-script` | 쇼츠/릴스 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
-| `ATFM_DEBUG_PRIVACY_SAMPLE=1` (+`ATFM_SNAPSHOT_PRIVACY=/path.png`) | 가짜 메신저 창을 띄우고 채팅 프라이버시 유리판을 올린 뒤 그 영역을 캡처합니다; `ATFM_PROBE_PRIVACY=cluster\|<창 ID> ATFM --probe`는 메시지 묶기 자체 테스트 / 실제 창 분석 결과 출력 |
+| `ATFM_DEBUG_PRIVACY_SAMPLE=1` (+`ATFM_SNAPSHOT_PRIVACY=/path.png`) | 가짜 메신저 창을 띄우고 채팅 프라이버시 유리판을 올린 뒤 그 영역을 캡처합니다; `ATFM_PROBE_PRIVACY=cluster\|windows\|browser\|<창 ID> ATFM --probe`는 메시지 묶기 자체 테스트 / 메신저 창 목록(제목 가림) / 브라우저 앞 탭이 Google Chat인지 / 실제 창 분석 결과 출력 |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
 | `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
