@@ -162,7 +162,7 @@
   - 고른 메신저(카카오톡 · Google Chat 앱/브라우저 탭 · Slack · Discord · Telegram · WhatsApp · 메시지 · LINE, 실행 중인 다른 앱도 추가)가
     맨 앞에 있을 때 그 앱의 **맨 앞 창** 채팅 기록 위에 **유리판**을 띄워 흐리게. 가장 최근 N개(기본 2개) 메시지와 지금 쓰는 입력창은 그대로 보임.
     카카오톡은 친구/채팅 목록(메인 창)은 두고 채팅방 창만 가림
-  - Google Chat 브라우저 탭은 창 제목 또는 **앞 탭 주소**(chat.google.com · mail.google.com/chat, AppleScript로 0.7초마다 확인 —
+  - Google Chat 브라우저 탭은 창 제목 또는 **앞 탭 주소**(chat.google.com · Gmail 안의 채팅 mail.google.com/mail/u/0/#chat/…, AppleScript로 0.7초마다 확인 —
     자동 스크롤과 같은 자동화 권한)로 알아봄. 다른 탭으로 가면 바로 걷힘
   - 메시지 위치는 창 이미지를 Vision 텍스트 사각형 감지로 훑어 줄 사이 간격으로 묶어서 찾음(글자를 읽지는 않음). 0.5초마다 다시 계산하고
     창을 옮기거나 크기를 바꾸면 초당 60번 따라감. 입력창 높이·위쪽 툴바 여백·창 제목/주소 조건은 앱마다 조절

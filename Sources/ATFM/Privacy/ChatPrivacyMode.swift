@@ -85,7 +85,16 @@ struct PrivacyTarget: Codable, Identifiable, Equatable {
         preset("line", "jp.naver.line.mac", "LINE", composer: 120),
     ]
 
-    static let googleChatURLs = ["chat.google.com", "mail.google.com/chat"]
+    /// Gmail-integrated Chat lives at mail.google.com/mail/u/<n>/#chat/…, standalone Chat at chat.google.com.
+    /// A "*" in a keyword means every part must appear in the URL.
+    static let googleChatURLs = ["chat.google.com", "google.com/chat", "google.com*#chat"]
+
+    static func urlMatches(_ url: String, keywords: [String]) -> Bool {
+        let lower = url.lowercased()
+        return keywords.contains { keyword in
+            keyword.lowercased().split(separator: "*").allSatisfy { part in lower.contains(part) }
+        }
+    }
 
     private static func preset(_ key: String, _ bundle: String, _ name: String, nameHint: String? = nil, top: Double = 0, composer: Double,
                                chatTab: Bool = false, excluded: [String]? = nil) -> PrivacyTarget {
@@ -333,8 +342,7 @@ final class ChatPrivacyMode {
     private func frontTabMatches(_ target: PrivacyTarget) -> Bool {
         guard let keywords = target.urlKeywords, tabURLBundle == target.bundleID,
               Date().timeIntervalSince(tabURLTime) < 4 else { return false }
-        let url = tabURL.lowercased()
-        return keywords.contains { url.contains($0.lowercased()) }
+        return PrivacyTarget.urlMatches(tabURL, keywords: keywords)
     }
 
     private func pollFrontTabURL(of target: PrivacyTarget) {

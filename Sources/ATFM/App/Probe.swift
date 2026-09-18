@@ -296,7 +296,7 @@ enum Probe {
                 for browser in running {
                     AppleScriptRunner.run(ChatPrivacyMode.frontTabScript(bundle: browser.rawValue), timeout: 5) { output, error in
                         let url = output.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                        let hit = PrivacyTarget.googleChatURLs.contains { url.contains($0) }
+                        let hit = PrivacyTarget.urlMatches(url, keywords: PrivacyTarget.googleChatURLs)
                         print("  \(browser.rawValue): \(error ?? "ok") front tab is Google Chat: \(hit) (url length \(url.count))")
                         pending -= 1
                     }

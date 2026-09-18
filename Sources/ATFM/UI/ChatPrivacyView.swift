@@ -192,8 +192,8 @@ private struct TargetEditor: View {
             }
             if target.supportsURLCheck || target.urlKeywords != nil {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("앞 탭 주소에 포함 (쉼표로 여러 개, 비우면 안 씀)").font(.system(size: 11)).foregroundStyle(.secondary)
-                    TextField("예: chat.google.com, mail.google.com/chat",
+                    Text("앞 탭 주소에 포함 (쉼표로 여러 개 · a*b는 둘 다 포함, 비우면 안 씀)").font(.system(size: 11)).foregroundStyle(.secondary)
+                    TextField("예: chat.google.com, google.com*#chat",
                               text: Binding(get: { (target.urlKeywords ?? []).joined(separator: ", ") },
                                             set: { text in
                                                 let parts = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
