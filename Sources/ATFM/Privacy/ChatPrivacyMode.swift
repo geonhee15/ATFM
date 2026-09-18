@@ -127,10 +127,12 @@ final class ChatPrivacyMode {
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var currentWindowID: CGWindowID = 0
     @ObservationIgnored private var currentClear: CGFloat = 0
+    @ObservationIgnored private var currentFeather: CGFloat = 18
     @ObservationIgnored private var lastAnalysis = Date.distantPast
     @ObservationIgnored private var analysisInFlight = false
     @ObservationIgnored var debugAllowSelf = false
     @ObservationIgnored var debugLog: ((String) -> Void)?
+    var debugOverlayDescription: String { overlay.debugMaskDescription + " clear=\(Int(currentClear)) feather=\(Int(currentFeather))" }
 
     private static let enabledKey = "chatPrivacyEnabled"
     private static let targetsKey = "chatPrivacyTargets"
@@ -265,8 +267,10 @@ final class ChatPrivacyMode {
 
     private func tick() {
         guard isEnabled else { return }
-        guard let app = NSWorkspace.shared.frontmostApplication, let bundle = app.bundleIdentifier,
-              debugAllowSelf || app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+        let me = ProcessInfo.processInfo.processIdentifier
+        let front = debugAllowSelf ? NSRunningApplication.current : NSWorkspace.shared.frontmostApplication
+        guard let app = front, let bundle = app.bundleIdentifier,
+              debugAllowSelf || app.processIdentifier != me,
               let target = targets.first(where: { $0.enabled && $0.matches(bundle: bundle, appName: app.localizedName) }) else {
             release()
             return
@@ -283,10 +287,11 @@ final class ChatPrivacyMode {
         if window.id != currentWindowID {
             currentWindowID = window.id
             currentClear = Double(target.composerHeight) + 150
+            currentFeather = 18
             lastAnalysis = .distantPast
         }
         if activeName != target.name { activeName = target.name }
-        overlay.show(windowFrame: window.frame, topInset: CGFloat(target.topInset), clearHeight: currentClear, animated: true)
+        overlay.show(windowFrame: window.frame, topInset: CGFloat(target.topInset), clearHeight: currentClear, feather: currentFeather, animated: true)
         if Date().timeIntervalSince(lastAnalysis) > 0.5 {
             analyze(window: window, target: target)
         }
@@ -391,9 +396,10 @@ final class ChatPrivacyMode {
                 guard self.currentWindowID == windowID else { return }
                 if let result {
                     self.currentClear = result.clearHeight
+                    self.currentFeather = result.opaqueHeight - result.clearHeight
                     self.visibleMessages = min(result.messageCount, count)
                     self.lastError = nil
-                    self.debugLog?("blocks=\(result.blocks.count) clear=\(Int(result.clearHeight)) visible=\(self.visibleMessages)")
+                    self.debugLog?("blocks=\(result.blocks.count) clear=\(Int(result.clearHeight)) opaque=\(Int(result.opaqueHeight)) visible=\(self.visibleMessages) first=\(result.blocks.prefix(5).map { "\(Int($0.bottom))-\(Int($0.top))" }) took=\(Int(ChatLayoutAnalyzer.lastDuration * 1000))ms")
                 } else {
                     self.lastError = "창 이미지를 읽지 못했어요 (화면 기록 권한 확인)"
                 }

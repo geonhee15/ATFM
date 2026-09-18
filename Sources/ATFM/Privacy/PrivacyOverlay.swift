@@ -29,14 +29,22 @@ final class PrivacyOverlay {
     private var lastGlassFrame: NSRect = .zero
     private(set) var isVisible = false
     var windowNumber: Int { panel?.windowNumber ?? 0 }
+    var debugMaskDescription: String { sheet?.maskDebugDescription ?? "no sheet" }
     var tone: Tone = .auto {
         didSet { panel?.appearance = tone.appearance }
     }
     /// Horizontal/bottom inset so the sheet reads as a floating pane rather than a slab.
     private let inset: CGFloat = 0
     static let cornerRadius: CGFloat = 12
+    /// How far the sheet reaches below the clear boundary (the fully transparent end of the feather).
+    static let bottomToe: CGFloat = 6
+    /// Height of the soft edge above the boundary (from the analyzer: the gap up to the next-older message).
+    private var currentFeather: CGFloat = 18
+    static let topFeatherHeight: CGFloat = 14
+    private var sheet: GlassSheet?
 
-    func show(windowFrame: NSRect, topInset: CGFloat, clearHeight: CGFloat, animated: Bool) {
+    func show(windowFrame: NSRect, topInset: CGFloat, clearHeight: CGFloat, feather: CGFloat, animated: Bool) {
+        currentFeather = max(6, feather)
         let panel = panel ?? makePanel()
         if panel.frame != windowFrame {
             panel.setFrame(windowFrame, display: false)
@@ -47,7 +55,10 @@ final class PrivacyOverlay {
             if !isVisible { panel.orderFrontRegardless(); isVisible = true }
             return
         }
-        let target = NSRect(x: inset, y: clearHeight, width: windowFrame.width - inset * 2, height: coveredHeight)
+        let toe = min(Self.bottomToe, clearHeight)
+        let target = NSRect(x: inset, y: clearHeight - toe, width: windowFrame.width - inset * 2, height: coveredHeight + toe)
+        sheet?.topFeather = topInset > 0 ? Self.topFeatherHeight : 0
+        if sheet?.bottomFeather != currentFeather { sheet?.bottomFeather = currentFeather }
         glass?.isHidden = false
         if !isVisible {
             glass?.frame = target
@@ -62,7 +73,10 @@ final class PrivacyOverlay {
             }
             return
         }
-        if abs(target.minY - lastGlassFrame.minY) < 3 && abs(target.height - lastGlassFrame.height) < 3 && target.width == lastGlassFrame.width { return }
+        if abs(target.minY - lastGlassFrame.minY) < 3 && abs(target.height - lastGlassFrame.height) < 3 && target.width == lastGlassFrame.width {
+            updateMask(size: target.size)
+            return
+        }
         lastGlassFrame = target
         if animated {
             NSAnimationContext.runAnimationGroup { context in
@@ -113,10 +127,12 @@ final class PrivacyOverlay {
         container.autoresizingMask = [.width, .height]
         panel.contentView = container
 
-        let glass = makeGlass()
-        glass.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
-        container.addSubview(glass)
-        self.glass = glass
+        let glassView = makeGlass()
+        let sheet = GlassSheet(glass: glassView, featherable: fallbackEffect == nil, bottomFeather: currentFeather)
+        sheet.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        container.addSubview(sheet)
+        self.sheet = sheet
+        self.glass = sheet
         self.panel = panel
         return panel
     }
@@ -153,16 +169,86 @@ final class PrivacyOverlay {
     /// Soft fade at the bottom edge of the vibrancy fallback so the sheet doesn't end in a hard line.
     private func updateMask(size: CGSize) {
         guard let effect = fallbackEffect, size.width > 0, size.height > 0 else { return }
-        let fade: CGFloat = min(28, size.height * 0.3)
+        let fade = min(Self.bottomToe + currentFeather, size.height * 0.4)
         let image = NSImage(size: size, flipped: false) { rect in
             let path = NSBezierPath(roundedRect: rect, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
             path.addClip()
+            let h = max(fade, rect.height)
             let gradient = NSGradient(colorsAndLocations: (NSColor.black.withAlphaComponent(0), 0),
-                                      (NSColor.black, fade / max(fade, rect.height)),
+                                      (NSColor.black.withAlphaComponent(0.72), fade * 0.45 / h),
+                                      (NSColor.black, fade / h),
                                       (NSColor.black, 1))
             gradient?.draw(in: rect, angle: 90)
             return true
         }
         effect.maskImage = image
+    }
+}
+
+
+/// Layer-backed holder for the glass with feathered top/bottom edges (a gradient layer mask).
+/// The vibrancy fallback masks itself via `maskImage`, so the layer mask is only used for real glass.
+final class GlassSheet: NSView {
+    private let glass: NSView
+    private let featherable: Bool
+    private let feather = CAGradientLayer()
+    var bottomFeather: CGFloat {
+        didSet { if oldValue != bottomFeather { updateMask() } }
+    }
+    var topFeather: CGFloat = 0 {
+        didSet { if oldValue != topFeather { updateMask() } }
+    }
+
+    init(glass: NSView, featherable: Bool, bottomFeather: CGFloat) {
+        self.glass = glass
+        self.featherable = featherable
+        self.bottomFeather = bottomFeather
+        super.init(frame: .zero)
+        wantsLayer = true
+        glass.frame = bounds
+        glass.autoresizingMask = [.width, .height]
+        addSubview(glass)
+        if featherable {
+            feather.startPoint = CGPoint(x: 0.5, y: 0)     // bottom → top (layer coordinates are not flipped)
+            feather.endPoint = CGPoint(x: 0.5, y: 1)
+            feather.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+            layer?.mask = feather
+        }
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    var maskDebugDescription: String {
+        "sheet frame=\(frame.integral) bounds=\(bounds.integral) glass=\(glass.frame.integral) mask.frame=\(feather.frame.integral) " +
+        "locations=\((feather.locations ?? []).map { String(format: "%.3f", $0.doubleValue) }) " +
+        "alphas=\((feather.colors as? [CGColor] ?? []).map { String(format: "%.2f", $0.alpha) }) feather=\(bottomFeather) top=\(topFeather) flipped=\(layer?.isGeometryFlipped ?? false)"
+    }
+
+    override func layout() {
+        super.layout()
+        glass.frame = bounds
+        guard featherable else { return }
+        feather.frame = bounds
+        updateMask()
+    }
+
+    private func updateMask() {
+        guard featherable else { return }
+        let height = bounds.height
+        guard height > 0 else { return }
+        let toe = PrivacyOverlay.bottomToe
+        let bottom = min(toe + bottomFeather, height * 0.45)
+        let top = min(topFeather, height * 0.25)
+        let black = NSColor.black
+        // Transparent at the very bottom (the toe below the boundary), ~75% a third of the way up, solid by the end of the feather.
+        var stops: [(CGFloat, CGFloat)] = [(0, 0), (bottom * 0.45 / height, 0.7), (bottom / height, 1)]
+        if top > 0 {
+            stops.append(((height - top) / height, 1))
+            stops.append((1, 0))
+        } else {
+            stops.append((1, 1))
+        }
+        feather.colors = stops.map { black.withAlphaComponent($0.1).cgColor }
+        feather.locations = stops.map { NSNumber(value: Double($0.0)) }
     }
 }

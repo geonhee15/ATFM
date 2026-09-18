@@ -19,8 +19,7 @@ enum PrivacySampleWindow {
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SampleChatView())
         if let origin { window.setFrameOrigin(origin) } else { window.center() }
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         return window
     }
 }

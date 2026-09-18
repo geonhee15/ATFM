@@ -403,9 +403,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Screen-region capture of the sample messenger window plus the glass overlay above it.
     private func snapshotPrivacySample(to path: String) {
         guard let window = privacySampleWindow, let screen = NSScreen.screens.first else { return }
+        NSLog("ATFM privacy: %@", chatPrivacy.debugOverlayDescription)
         let frame = window.frame   // exactly the sample window, so nothing else on screen ends up in the capture
         let cgRect = CGRect(x: frame.minX, y: screen.frame.height - frame.maxY, width: frame.width, height: frame.height)
-        guard let image = CGWindowListCreateImage(cgRect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]) else { return }
+        // The sample window was ordered front regardless of activation, so the on-screen composite of its
+        // frame is just the sample plus the glass sheet above it.
+        guard let image = CGWindowListCreateImage(cgRect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]) else {
+            NSLog("ATFM privacy: snapshot capture failed")
+            return
+        }
         let rep = NSBitmapImageRep(cgImage: image)
         if let data = rep.representation(using: .png, properties: [:]) {
             try? data.write(to: URL(fileURLWithPath: path))
