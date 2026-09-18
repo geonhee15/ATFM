@@ -276,6 +276,27 @@ enum Probe {
             default: break
             }
         }
+        if let what = ProcessInfo.processInfo.environment["ATFM_PROBE_PRIVACY"] {   // "cluster" (synthetic) or a window id
+            if what == "cluster" {
+                // A 600 pt tall window: composer text at 40–56, then 6 message blocks going up, 22 pt apart, two-line ones 6 pt apart.
+                var lines: [ChatLayoutAnalyzer.Block] = [.init(bottom: 40, top: 56), .init(bottom: 12, top: 24)]
+                var y: CGFloat = 120
+                for i in 0..<6 {
+                    lines.append(.init(bottom: y, top: y + 14))
+                    if i % 2 == 0 { lines.append(.init(bottom: y + 20, top: y + 34)); y += 34 + 22 } else { y += 14 + 22 }
+                }
+                for n in 1...3 {
+                    let r = ChatLayoutAnalyzer.cluster(lines, windowHeight: 600, composerHeight: 96, recentCount: n)
+                    print("recent=\(n): messages=\(r.messageCount) clear=\(Int(r.clearHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
+                }
+            } else if let id = UInt32(what), let image = CGWindowListCreateImage(.null, .optionIncludingWindow, id, [.boundsIgnoreFraming, .nominalResolution]) {
+                let height = CGFloat(image.height)
+                if let r = ChatLayoutAnalyzer.analyze(image, windowHeight: height, composerHeight: 110, recentCount: 2) {
+                    print("window \(id): \(image.width)x\(image.height) messages=\(r.messageCount) clear=\(Int(r.clearHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
+                } else { print("analysis failed") }
+            } else { print("no image for window \(what)") }
+            return
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_HOTKEY"] == "1" {
             // Key-cap names + a real Carbon registration round-trip for the default combos.
             MainActor.assumeIsolated {

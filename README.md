@@ -37,6 +37,10 @@
     <td align="center"><img src="docs/screenshots/translate.png" width="230"><br><b>번역</b><br><sub>Apple 번역 · Gemini</sub></td>
     <td align="center"><img src="docs/screenshots/timers.png" width="230"><br><b>타이머</b><br><sub>스탑워치 · 타이머 · 메뉴 막대 표시</sub></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/privacy.png" width="230"><br><b>채팅 프라이버시</b><br><sub>앱 선택 · ⌘⌥⇧B · 최근 N개만 보이기</sub></td>
+    <td align="center" colspan="2"><img src="docs/screenshots/privacy-overlay.png" width="300"><br><b>채팅 프라이버시 · 유리판</b><br><sub>메신저 창 위에 Liquid Glass — 최근 2개와 입력창만 그대로 (샘플 창)</sub></td>
+  </tr>
 </table>
 
 <p>
@@ -100,6 +104,7 @@
   - 최근 결과 목록에서 클릭 한 번으로 다시 복사
   - **단축키**: 기본 ⌘⇧1(텍스트 복사) · ⌘⇧2(색상 추출). 다른 앱을 쓰는 중에도 동작(Carbon `RegisterEventHotKey`, 손쉬운 사용 권한 불필요).
     탭의 단축키 카드에서 조합을 클릭한 뒤 새 키를 눌러 바꾸고, ↺ 로 하나씩 또는 "모두 기본값으로" 되돌릴 수 있음
+    (채팅 프라이버시 ⌘⌥⇧B는 그 탭에서 같은 방식으로)
 - **미니 메모** 탭: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
   전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
 - **날짜** 탭
@@ -153,6 +158,14 @@
   - **앱별 볼륨**(macOS 14.2+): 지금 소리를 내는 앱마다 0~100% 슬라이더. 낮추면 그 앱의 프로세스들을 Core Audio 프로세스 탭으로
     가로채(원래 출력은 음소거) 원하는 크기로 다시 내보냄. 100%로 돌리면 탭을 없애 원래 경로로 복귀. Chrome처럼 헬퍼 프로세스가 소리를 내는
     앱도 하나로 묶고, 앱을 다시 켜도 기억(`appVolumes`). 시스템 오디오 녹음 권한 사용
+- **채팅 프라이버시** 탭
+  - 고른 메신저(카카오톡 · Google Chat 앱/브라우저 탭 · Slack · Discord · Telegram · WhatsApp · 메시지 · LINE, 실행 중인 다른 앱도 추가)가
+    맨 앞에 있을 때 그 창의 채팅 기록 위에 **유리판**을 띄워 흐리게. 가장 최근 N개(기본 2개) 메시지와 지금 쓰는 입력창은 그대로 보임
+  - 메시지 위치는 창 이미지를 Vision 텍스트 사각형 감지로 훑어 줄 사이 간격으로 묶어서 찾음(글자를 읽지는 않음). 0.5초마다 다시 계산하고
+    창을 옮기거나 크기를 바꿔도 따라감. 입력창 높이·위쪽 툴바 여백·창 제목 조건(브라우저 탭용)은 앱마다 조절
+  - macOS 26에서는 진짜 Liquid Glass(`NSGlassEffectView`), 그 아래는 뒷창을 흐리는 비브런시 + 아래쪽 페이드. 클릭·스크롤은 유리판을
+    통과하고, 톤(자동/밝게/어둡게) 선택
+  - 전역 단축키 **⌘⌥⇧B**로 켜고 끄기(패널에서 바꾸기·기본값 복원, 상단 팝업으로 상태 표시). 창 제목 조건은 화면 기록 권한이 있어야 읽힘
 - **파일 변환 · 다운로드** 탭
   - **링크 다운로드**: YouTube 등 링크를 붙여넣고 화질(최고 · H.264 호환 최고 · 1080p · 720p · MP3만)을 골라 저장.
     Homebrew `yt-dlp` + ffmpeg로 최고 영상·오디오 스트림을 받아 MP4로 합칩니다. 진행률·속도·남은 시간, 중단, 완료 후
@@ -228,6 +241,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari\|reels\|reels-script` | 쇼츠/릴스 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
+| `ATFM_DEBUG_PRIVACY_SAMPLE=1` (+`ATFM_SNAPSHOT_PRIVACY=/path.png`) | 가짜 메신저 창을 띄우고 채팅 프라이버시 유리판을 올린 뒤 그 영역을 캡처합니다; `ATFM_PROBE_PRIVACY=cluster\|<창 ID> ATFM --probe`는 메시지 묶기 자체 테스트 / 실제 창 분석 결과 출력 |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
 | `ATFM_SNAPSHOT_DELAY=6` | 스냅샷까지 기다리는 초 (기본 2) |
 | `ATFM_TAB=system` | 시작 탭 (`clipboard` · `checklist` · `awake` · `system` · `network` · `actions` · `convert` · `player` · `ai` · `settings`) |
@@ -265,6 +279,7 @@ Sources/ATFM
 ├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
 ├── AutoScroll/  자동 스크롤 (쇼츠·릴스 탭 폴링 osascript + 페이지 에이전트 JS ShortsAgent/ReelsAgent)
+├── Privacy/     채팅 프라이버시 (앞창 추적 + Vision 텍스트 사각형 클러스터링 ChatLayoutAnalyzer, 유리 오버레이 PrivacyOverlay, 샘플 창)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)
 └── Support/     설정 키, 앱 아이콘 캐시
 Sources/MediaRemoteBridge/Bridge.swift   perl이 로드하는 MediaRemote 브리지 (dylib로 따로 빌드)

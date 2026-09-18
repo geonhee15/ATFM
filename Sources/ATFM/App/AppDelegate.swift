@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let downloader = MediaDownloader()
     private let screenTools = ScreenTools()
     private let autoScroller = AutoScroller()
+    private let chatPrivacy = ChatPrivacyMode()
+    private var privacySampleWindow: NSWindow?
     private let dictionary = DictionaryHub()
     private let calculator = CalculatorModel()
     private let translator = TranslatorModel()
@@ -100,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -128,7 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         screenTools.hotkeys.handlers = [
             .captureText: { [weak self] in self?.screenTools.captureText() },
             .pickColor: { [weak self] in self?.screenTools.pickColor() },
+            .chatPrivacy: { [weak self] in self?.chatPrivacy.toggle() },
         ]
+        chatPrivacy.onToggled = { [weak self] on in
+            self?.screenTools.hud.show(.message(on ? "채팅 프라이버시 켬" : "채팅 프라이버시 끔", symbol: on ? "eye.slash.fill" : "eye"), duration: 1.4)
+        }
+        chatPrivacy.start()
         screenTools.hotkeys.focusForRecording = { [weak bubble] in bubble?.panel.makeKey() }
         screenTools.hotkeys.registerAll()
         autoScroller.start()
@@ -242,6 +249,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 timers.setDuration(25 * 60)
                 timers.startTimer()
+            }
+        }
+        if env["ATFM_DEBUG_PRIVACY_SAMPLE"] == "1" {   // fake messenger window + overlay (development / screenshots)
+            chatPrivacy.debugAllowSelf = true
+            chatPrivacy.update(PrivacySampleWindow.target())
+            if !chatPrivacy.targets.contains(where: { $0.id == "debug:self" }) {
+                // update() only replaces; register the sample target directly
+                chatPrivacy.addDebugTarget(PrivacySampleWindow.target())
+            }
+            chatPrivacy.debugLog = { NSLog("ATFM privacy: %@", $0) }
+            let originX = Double(env["ATFM_DEBUG_PRIVACY_X"] ?? "") ?? 120
+            let originY = Double(env["ATFM_DEBUG_PRIVACY_Y"] ?? "") ?? 120
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                MainActor.assumeIsolated {
+                    self.privacySampleWindow = PrivacySampleWindow.show(at: NSPoint(x: originX, y: originY))
+                    self.chatPrivacy.setEnabled(true, announce: false)
+                    if let path = env["ATFM_SNAPSHOT_PRIVACY"] {
+                        let delay = Double(env["ATFM_SNAPSHOT_DELAY"] ?? "") ?? 3
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            MainActor.assumeIsolated { self.snapshotPrivacySample(to: path) }
+                        }
+                    }
+                }
             }
         }
         if env["ATFM_DEBUG_CLEANUP_SCAN"] == "1" {
@@ -363,10 +393,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         downloader.cancel()
         screenTools.hotkeys.unregisterAll()
         autoScroller.stop()
+        chatPrivacy.stop()
         notes?.flush()
         soundPanel.stopAll()
         dates?.flush()
         nowPlaying.stop()
+    }
+
+    /// Screen-region capture of the sample messenger window plus the glass overlay above it.
+    private func snapshotPrivacySample(to path: String) {
+        guard let window = privacySampleWindow, let screen = NSScreen.screens.first else { return }
+        let frame = window.frame   // exactly the sample window, so nothing else on screen ends up in the capture
+        let cgRect = CGRect(x: frame.minX, y: screen.frame.height - frame.maxY, width: frame.width, height: frame.height)
+        guard let image = CGWindowListCreateImage(cgRect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]) else { return }
+        let rep = NSBitmapImageRep(cgImage: image)
+        if let data = rep.representation(using: .png, properties: [:]) {
+            try? data.write(to: URL(fileURLWithPath: path))
+        }
     }
 
     private func statusItemScreenRect() -> CGRect? {

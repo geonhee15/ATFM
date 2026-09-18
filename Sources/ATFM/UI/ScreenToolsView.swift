@@ -41,7 +41,7 @@ struct ScreenToolsView: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
             .padding(.bottom, 4)
-            ForEach(ToolHotkeys.Action.allCases) { action in
+            ForEach([ToolHotkeys.Action.captureText, .pickColor]) { action in
                 HotkeyRow(action: action, hotkeys: hotkeys)
                 if action != ToolHotkeys.Action.allCases.last {
                     Divider().padding(.leading, 14)
@@ -232,7 +232,7 @@ private struct RecordRow: View {
     }
 }
 
-private struct HotkeyRow: View {
+struct HotkeyRow: View {
     let action: ToolHotkeys.Action
     let hotkeys: ToolHotkeys
 
