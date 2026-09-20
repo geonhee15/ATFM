@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickActions = QuickActions()
     private var checklist: ChecklistStore?
     private var notes: QuickNotesStore?
+    private var storyboards: StoryboardStore?
     private var dates: DateStore?
     private var holidays: HolidayStore?
     private var cleaner: AppCleaner?
@@ -82,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let notesDirectory = ProcessInfo.processInfo.environment["ATFM_DEBUG_NOTES_DIR"].map { URL(fileURLWithPath: $0) } ?? store.directory
         let notes = QuickNotesStore(directory: notesDirectory)
         self.notes = notes
+        let storyboards = StoryboardStore(directory: store.directory)
+        self.storyboards = storyboards
+        if ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_SAMPLE"] == "1" {
+            storyboards.seedSample(musicPath: ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_MUSIC"])
+        }
         let dates = DateStore(directory: store.directory)
         self.dates = dates
         let holidays = HolidayStore(directory: store.directory)
@@ -100,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
                             networkMonitor: networkMonitor, speedTester: speedTester,
-                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
+                            quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, storyboards: storyboards, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
@@ -395,6 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         autoScroller.stop()
         chatPrivacy.stop()
         notes?.flush()
+        storyboards?.flush()
         soundPanel.stopAll()
         dates?.flush()
         nowPlaying.stop()

@@ -1,7 +1,7 @@
 # ATFM — Additional Things For Mac
 
 맥을 쓰면서 "이거 하나 더 있었으면…" 싶었던 기능들을 메뉴 막대 앱 하나에 모아가는 프로젝트입니다.
-클립보드 기록으로 시작해서 체크리스트 · 미니 메모 · 시스템/네트워크 모니터 · 빠른 동작 · 빠른 툴(화면 OCR·스포이드) ·
+클립보드 기록으로 시작해서 체크리스트 · 메모(미니 메모·스토리보드) · 시스템/네트워크 모니터 · 빠른 동작 · 빠른 툴(화면 OCR·스포이드) ·
 쇼츠 자동 스크롤 · 파일 변환/다운로드 · 미니 플레이어 · 간편 AI까지, 탭 하나씩 늘려가고 있습니다.
 
 ## 스크린샷
@@ -10,7 +10,7 @@
   <tr>
     <td align="center"><img src="docs/screenshots/clipboard.png" width="230"><br><b>클립보드</b><br><sub>앱별 · 시:분:초 · 검색</sub></td>
     <td align="center"><img src="docs/screenshots/checklist.png" width="230"><br><b>체크리스트</b><br><sub>마감 배지 · 보관함</sub></td>
-    <td align="center"><img src="docs/screenshots/notes.png" width="230"><br><b>미니 메모</b><br><sub>자동 저장 스크래치</sub></td>
+    <td align="center"><img src="docs/screenshots/notes.png" width="230"><br><b>메모 · 미니 메모</b><br><sub>자동 저장 스크래치</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/system.png" width="230"><br><b>시스템</b><br><sub>온도 · CPU/GPU · 배터리</sub></td>
@@ -40,6 +40,9 @@
   <tr>
     <td align="center"><img src="docs/screenshots/privacy.png" width="230"><br><b>채팅 프라이버시</b><br><sub>앱 선택 · ⌘⌥⇧B · 최근 N개만 보이기</sub></td>
     <td align="center" colspan="2"><img src="docs/screenshots/privacy-overlay.png" width="300"><br><b>채팅 프라이버시 · 유리판</b><br><sub>메신저 창 위에 Liquid Glass — 최근 2개와 입력창만 그대로 (샘플 창)</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><img src="docs/screenshots/storyboard.png" width="300"><br><b>메모 · 스토리보드</b><br><sub>장면별 캔버스(도형·텍스트·스케치·배경·비율) · 배경음악 타임라인에 장면 구간</sub></td>
   </tr>
 </table>
 
@@ -105,8 +108,16 @@
   - **단축키**: 기본 ⌘⇧1(텍스트 복사) · ⌘⇧2(색상 추출). 다른 앱을 쓰는 중에도 동작(Carbon `RegisterEventHotKey`, 손쉬운 사용 권한 불필요).
     탭의 단축키 카드에서 조합을 클릭한 뒤 새 키를 눌러 바꾸고, ↺ 로 하나씩 또는 "모두 기본값으로" 되돌릴 수 있음
     (채팅 프라이버시 ⌘⌥⇧B는 그 탭에서 같은 방식으로)
-- **미니 메모** 탭: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
-  전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
+- **메모** 탭 (상단 세그먼트로 두 섹션)
+  - **미니 메모**: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
+    전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
+  - **스토리보드**: 영상 기획용. 스토리보드를 여러 개 두고(이름 바꾸기·삭제), 각 스토리보드에 **Scene 1, 2, 3…** 을 추가/복제/순서 바꾸기/삭제.
+    장면마다 **화면 비율**(16:9 · 9:16 · 1:1 · 4:3 · 3:4 · 21:9 · 4:5, "모든 장면에 적용")과 **배경색**을 정하고, 캔버스에
+    **도형**(사각형·둥근 사각형·원·삼각형·화살표·별, 채우기/선) · **텍스트**(클릭한 곳에 추가, 글자 크기·색) · **펜 스케치**(색·굵기, 마지막 선 되돌리기)를
+    올려 드래그로 옮기고 모서리 핸들로 크기를 바꿈. 장면 아래 한 줄 메모(대사·카메라). 좌표는 비율로 저장해서 화면 비율을 바꿔도 그대로 따라옴
+  - **배경음악**: 오디오 파일을 고르면 파형 타임라인이 생기고 장면들이 구간을 나눠 가짐(기본 균등). 구분선을 끌어서 "여기부터 여기까지 Scene 2"처럼
+    시점을 정하고, 재생하면 캔버스와 썸네일이 지금 구간의 장면으로 따라가며 흐름을 볼 수 있음. 장면을 누르면 그 구간으로 이동
+  - 오른쪽 위 ⤢ 로 **큰 창**에서 같은 스토리보드를 편집. 모두 `storyboards.json`에 자동 저장
 - **날짜** 탭
   - 맨 위에 검색창: 키워드로 일정 · D-day · 학교 일정 · 공휴일을 한 번에 찾고(제목·메모), 결과를 누르면 그 날짜로 이동
   - 오늘 날짜(요일)와 초 단위 시계, 올해 며칠째 · 몇 주차 · 남은 날
@@ -247,6 +258,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
+| `ATFM_DEBUG_MEMO=notes\|storyboard` · `ATFM_DEBUG_STORYBOARD_SAMPLE=1` (+`ATFM_DEBUG_STORYBOARD_MUSIC=/path.wav`) | 메모 탭의 섹션을 고르고, 도형·텍스트·스케치가 든 샘플 스토리보드(선택 시 배경음악까지)를 만들어 둡니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari\|reels\|reels-script` | 쇼츠/릴스 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
 | `ATFM_DEBUG_PRIVACY_SAMPLE=1` (+`ATFM_SNAPSHOT_PRIVACY=/path.png`) | 가짜 메신저 창을 띄우고 채팅 프라이버시 유리판을 올린 뒤 그 영역을 캡처합니다; `ATFM_PROBE_PRIVACY=cluster\|sample\|windows\|browser\|dom\|<창 ID> ATFM --probe`는 메시지 묶기 자체 테스트 / 샘플 채팅을 오프스크린으로 그려 헤더·공지·경계 분석 / 메신저 창 목록(제목 가림) / 브라우저 앞 탭이 Google Chat인지 / Google Chat 탭의 페이지 구조(역할·좌표만) / 실제 창 분석 결과 출력 |
 | `ATFM_DEBUG_TOOLS=ocr-bubble\|hud-text\|hud-color\|overlay` + `ATFM_SNAPSHOT_HUD=/path.png` | 빠른 툴의 OCR·HUD·오버레이를 마우스 없이 실행하고 캡처합니다 |
@@ -279,6 +291,7 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
+├── Storyboard/  스토리보드 (모델·StoryboardStore: 장면/도형/스케치, AVAudioPlayer 재생 + 파형, 장면 구간 cuts, 큰 창)
 ├── Calculator/  계산기 (CalcEngine 파서·평가기, 기록)
 ├── Translate/   번역 (Apple Translation 세션 호스트, Gemini 단발 호출)
 ├── Timers/      타이머 (스탑워치·카운트다운, 메뉴 막대 표시, 알림)

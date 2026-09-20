@@ -53,7 +53,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .clipboard: return "클립보드"
         case .checklist: return "체크리스트"
-        case .notes: return "미니 메모"
+        case .notes: return "메모"
         case .dates: return "날짜"
         case .dictionary: return "사전"
         case .calculator: return "계산기"
@@ -85,6 +85,7 @@ struct RootView: View {
     var cleaner: AppCleaner
     var checklist: ChecklistStore
     var notes: QuickNotesStore
+    var storyboards: StoryboardStore
     var dates: DateStore
     var externalCalendar: ExternalCalendarSource
     var holidays: HolidayStore
@@ -126,7 +127,7 @@ struct RootView: View {
                 case .checklist:
                     ChecklistView(store: checklist)
                 case .notes:
-                    QuickNotesView(store: notes)
+                    MemoView(notes: notes, storyboards: storyboards)
                 case .dates:
                     DatesView(store: dates, external: externalCalendar, holidays: holidays)
                 case .dictionary:
