@@ -288,6 +288,7 @@ enum Probe {
                 for n in 1...3 {
                     let r = ChatLayoutAnalyzer.cluster(lines, windowHeight: 600, composerHeight: 96, recentCount: n)
                     print("recent=\(n): messages=\(r.messageCount) clear=\(Int(r.clearHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
+                    _ = r.cover
                 }
             } else if what == "browser" {
                 let running = ShortsBrowser.allCases.filter(\.isRunning)
@@ -302,6 +303,50 @@ enum Probe {
                     }
                 }
                 while pending > 0 { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }   // completions land on the main actor
+            } else if what == "sample" {
+                // Offscreen sample chat → analyzer: header/notice detection and the clear boundary, no windows involved.
+                guard let image = PrivacySampleWindow.renderImage() else { print("render failed"); return }
+                let size = CGSize(width: 420, height: 620)
+                for n in 1...3 {
+                    if let r = ChatLayoutAnalyzer.analyze(image, windowSize: size, panel: nil, headerInset: 46, composerHeight: 96, recentCount: n) {
+                        print("recent=\(n): image \(image.width)x\(image.height) messages=\(r.messageCount) clear=\(Int(r.clearHeight)) coverTop=\(Int(r.cover.maxY)) header=\(r.detectedHeader) notice=\(Int(r.noticeHeight)) x=\(Int(r.cover.minX))-\(Int(r.cover.maxX)) blocks=\(r.blocks.prefix(4).map { "\(Int($0.bottom))-\(Int($0.top))" }) \(Int(ChatLayoutAnalyzer.lastDuration * 1000))ms")
+                    } else { print("analysis failed") }
+                }
+            } else if what == "dom" {
+                // Geometry of the Google Chat page in the front Chrome tab (roles/rects only, no text).
+                let js = """
+                (() => { const r = e => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; };
+                  const q = s => Array.from(document.querySelectorAll(s));
+                  const out = { url: location.host + location.pathname, inner: [innerWidth, innerHeight], outer: [outerWidth, outerHeight] };
+                  out.iframes = q('iframe').map(f => ({ rect: r(f), src: (f.src || '').replace(/\\?.*$/, '').slice(0, 80), name: (f.name || '').slice(0, 30) }));
+                  out.main = q('[role=main]').map(r);
+                  out.lists = q('[role=list]').map(e => ({ rect: r(e), items: e.querySelectorAll(':scope > [role=listitem]').length }));
+                  const items = q('[role=listitem]'); out.listitems = items.length; out.lastItems = items.slice(-3).map(r);
+                  out.textbox = q('[role=textbox]').map(r);
+                  out.headings = q('[role=heading]').slice(0, 8).map(e => ({ rect: r(e), level: e.getAttribute('aria-level') }));
+                  return JSON.stringify(out); })()
+                """
+                let escaped = js.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+                // Run in the first tab (any window) whose URL is Google Chat, so the user's current tab is untouched.
+                let script = """
+                tell application id "com.google.Chrome"
+                    repeat with w in windows
+                        repeat with t in tabs of w
+                            set u to URL of t
+                            if u contains "chat.google.com" or u contains "google.com/chat" or (u contains "google.com" and u contains "#chat") then
+                                return execute t javascript "\(escaped)"
+                            end if
+                        end repeat
+                    end repeat
+                    return "no Google Chat tab"
+                end tell
+                """
+                var done = false
+                AppleScriptRunner.run(script, timeout: 8) { output, error in
+                    print(error.map { "error: \($0)" } ?? output)
+                    done = true
+                }
+                while !done { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
             } else if what == "windows" {
                 // Layer-0 windows of running messenger/browser apps. Titles are masked unless they are just the app's name.
                 let info = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]) ?? []
@@ -325,9 +370,9 @@ enum Probe {
                     }
                 }
             } else if let id = UInt32(what), let image = CGWindowListCreateImage(.null, .optionIncludingWindow, id, [.boundsIgnoreFraming, .nominalResolution]) {
-                let height = CGFloat(image.height)
-                if let r = ChatLayoutAnalyzer.analyze(image, windowHeight: height, composerHeight: 110, recentCount: 2) {
-                    print("window \(id): \(image.width)x\(image.height) messages=\(r.messageCount) clear=\(Int(r.clearHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
+                let size = CGSize(width: image.width, height: image.height)
+                if let r = ChatLayoutAnalyzer.analyze(image, windowSize: size, panel: nil, headerInset: 60, composerHeight: 110, recentCount: 2) {
+                    print("window \(id): \(image.width)x\(image.height) messages=\(r.messageCount) clear=\(Int(r.clearHeight)) coverTop=\(Int(r.cover.maxY)) header=\(r.detectedHeader) notice=\(Int(r.noticeHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
                 } else { print("analysis failed") }
             } else { print("no image for window \(what)") }
             return

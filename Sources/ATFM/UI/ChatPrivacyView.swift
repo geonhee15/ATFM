@@ -62,7 +62,7 @@ struct ChatPrivacyView: View {
     private var statusDetail: String {
         if let error = privacy.lastError { return error }
         if privacy.isEnabled, privacy.activeName != nil {
-            return "최근 \(privacy.visibleMessages)개 메시지와 입력창만 보여요"
+            return "최근 \(privacy.visibleMessages)개 메시지와 입력창만 보여요" + (privacy.headerDetected ? " · 헤더 자동 감지" : "")
         }
         return "가장 최근 \(privacy.recentCount)개 메시지와 지금 쓰는 글만 남기고 흐리게"
     }
@@ -75,6 +75,13 @@ struct ChatPrivacyView: View {
                 HStack(spacing: 6) {
                     Text("\(privacy.recentCount)개").font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
                     Stepper("", value: $privacy.recentCount, in: 1...5).labelsHidden().controlSize(.small)
+                }
+            }
+            Divider().padding(.horizontal, 14)
+            ActionRow(icon: "water.waves", title: "가장자리 부드러움", subtitle: "클수록 경계가 안 보이지만 그 위 메시지가 살짝 비쳐요") {
+                HStack(spacing: 6) {
+                    Slider(value: $privacy.featherSize, in: 8...120, step: 4).controlSize(.small).frame(width: 110)
+                    Text("\(Int(privacy.featherSize))").font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit().frame(width: 26, alignment: .trailing)
                 }
             }
             Divider().padding(.horizontal, 14)
@@ -171,7 +178,7 @@ private struct TargetRow: View {
         if let urls = target.urlKeywords, !urls.isEmpty { parts.append("탭 주소 \(urls.first ?? "")") }
         else if let keyword = target.titleKeyword, !keyword.isEmpty { parts.append("창 제목에 '\(keyword)'") }
         if let excluded = target.excludedTitles, !excluded.isEmpty { parts.append("채팅방 창만") }
-        if target.topInset > 0 { parts.append("위 \(Int(target.topInset))px 제외") }
+        if target.topInset > 0 { parts.append("헤더 \(Int(target.topInset))px") }
         parts.append("입력창 \(Int(target.composerHeight))px")
         return parts.joined(separator: " · ")
     }
@@ -202,7 +209,7 @@ private struct TargetEditor: View {
                         .textFieldStyle(.roundedBorder).controlSize(.small)
                 }
             }
-            stepper("위쪽 여백 (툴바 등, 가리지 않음)", value: $target.topInset, range: 0...200, step: 4)
+            stepper("헤더 높이 (색으로 못 찾을 때 기본값)", value: $target.topInset, range: 0...300, step: 4)
             stepper("입력창 높이 (아래에서, 가리지 않음)", value: $target.composerHeight, range: 40...300, step: 10)
             HStack {
                 Spacer()

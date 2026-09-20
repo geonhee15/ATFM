@@ -8,7 +8,7 @@ enum PrivacySampleWindow {
 
     static func target() -> PrivacyTarget {
         PrivacyTarget(id: "debug:self", bundleID: Bundle.main.bundleIdentifier ?? "com.geonhee.atfm", name: "ATFM 샘플", nameHint: nil,
-                      titleKeyword: titleKeyword, urlKeywords: nil, excludedTitles: nil, topInset: 0, composerHeight: 96, enabled: true, isPreset: false)
+                      titleKeyword: titleKeyword, urlKeywords: nil, excludedTitles: nil, topInset: 74, composerHeight: 96, enabled: true, isPreset: false)
     }
 
     @discardableResult
@@ -19,12 +19,23 @@ enum PrivacySampleWindow {
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SampleChatView())
         if let origin { window.setFrameOrigin(origin) } else { window.center() }
+        window.level = .floating            // stays above whatever the user is doing while the harness runs
         window.orderFrontRegardless()
         return window
     }
+
+    /// Offscreen render of the sample chat (no window) for analyzer tests.
+    static func renderImage(size: CGSize = CGSize(width: 420, height: 620)) -> CGImage? {
+        let host = NSHostingView(rootView: SampleChatView())
+        host.frame = NSRect(origin: .zero, size: size)
+        host.layoutSubtreeIfNeeded()
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return nil }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        return rep.cgImage
+    }
 }
 
-private struct SampleChatView: View {
+struct SampleChatView: View {
     private struct Line: Identifiable {
         let id = UUID()
         let mine: Bool
@@ -64,6 +75,15 @@ private struct SampleChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "megaphone.fill").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("공지: 이번 주 금요일 회식은 7시, 장소는 추후 공지").font(.system(size: 11)).lineLimit(1)
+                            Spacer()
+                            Image(systemName: "chevron.down").font(.system(size: 10)).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.92)))
+                        .padding(.horizontal, 12).padding(.top, 8)
                         Text("2026년 9월 18일 금요일")
                             .font(.system(size: 10)).foregroundStyle(.secondary)
                             .padding(.horizontal, 10).padding(.vertical, 3)
@@ -76,7 +96,7 @@ private struct SampleChatView: View {
                                     .font(.system(size: 13))
                                     .padding(.horizontal, 11).padding(.vertical, 7)
                                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(line.mine ? Color.yellow.opacity(0.75) : Color.primary.opacity(0.07)))
+                                        .fill(line.mine ? Color.yellow.opacity(0.85) : Color.white))
                                 if !line.mine { Text(line.time).font(.system(size: 9)).foregroundStyle(.secondary); Spacer(minLength: 60) }
                             }
                             .padding(.horizontal, 14)
@@ -86,6 +106,7 @@ private struct SampleChatView: View {
                 }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            .background(Color(red: 0.73, green: 0.81, blue: 0.87))
             Divider()
             VStack(spacing: 6) {
                 HStack(alignment: .top) {

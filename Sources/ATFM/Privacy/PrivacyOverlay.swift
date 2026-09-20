@@ -36,28 +36,27 @@ final class PrivacyOverlay {
     /// Horizontal/bottom inset so the sheet reads as a floating pane rather than a slab.
     private let inset: CGFloat = 0
     static let cornerRadius: CGFloat = 12
-    /// How far the sheet reaches below the clear boundary (the fully transparent end of the feather).
-    static let bottomToe: CGFloat = 6
-    /// Height of the soft edge above the boundary (from the analyzer: the gap up to the next-older message).
-    private var currentFeather: CGFloat = 18
-    static let topFeatherHeight: CGFloat = 14
+    /// Total height of the soft bottom edge; 35% of it lies below the clear boundary.
+    private var currentFeather: CGFloat = 40
+    static let topFeatherHeight: CGFloat = 12
     private var sheet: GlassSheet?
 
-    func show(windowFrame: NSRect, topInset: CGFloat, clearHeight: CGFloat, feather: CGFloat, animated: Bool) {
+    /// - cover: the chat area in window coordinates (origin bottom-left); its bottom is the clear boundary.
+    /// - feather: total height of the soft bottom edge (centred a little above the boundary).
+    func show(windowFrame: NSRect, cover: NSRect, feather: CGFloat, animated: Bool) {
         currentFeather = max(6, feather)
         let panel = panel ?? makePanel()
         if panel.frame != windowFrame {
             panel.setFrame(windowFrame, display: false)
         }
-        let coveredHeight = windowFrame.height - topInset - clearHeight
-        guard coveredHeight >= 24 else {
+        guard cover.height >= 24, cover.width >= 40 else {
             glass?.isHidden = true
             if !isVisible { panel.orderFrontRegardless(); isVisible = true }
             return
         }
-        let toe = min(Self.bottomToe, clearHeight)
-        let target = NSRect(x: inset, y: clearHeight - toe, width: windowFrame.width - inset * 2, height: coveredHeight + toe)
-        sheet?.topFeather = topInset > 0 ? Self.topFeatherHeight : 0
+        let toe = min(currentFeather * 0.35, cover.minY)
+        let target = NSRect(x: cover.minX, y: cover.minY - toe, width: cover.width, height: cover.height + toe)
+        sheet?.topFeather = cover.maxY < windowFrame.height - 2 ? Self.topFeatherHeight : 0
         if sheet?.bottomFeather != currentFeather { sheet?.bottomFeather = currentFeather }
         glass?.isHidden = false
         if !isVisible {
@@ -169,14 +168,17 @@ final class PrivacyOverlay {
     /// Soft fade at the bottom edge of the vibrancy fallback so the sheet doesn't end in a hard line.
     private func updateMask(size: CGSize) {
         guard let effect = fallbackEffect, size.width > 0, size.height > 0 else { return }
-        let fade = min(Self.bottomToe + currentFeather, size.height * 0.4)
+        let fade = min(currentFeather, size.height * 0.5)
         let image = NSImage(size: size, flipped: false) { rect in
             let path = NSBezierPath(roundedRect: rect, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
             path.addClip()
             let h = max(fade, rect.height)
+            let stops = GlassSheet.rampStops(fade: fade, height: h)
             let gradient = NSGradient(colorsAndLocations: (NSColor.black.withAlphaComponent(0), 0),
-                                      (NSColor.black.withAlphaComponent(0.72), fade * 0.45 / h),
-                                      (NSColor.black, fade / h),
+                                      (NSColor.black.withAlphaComponent(stops[1].1), stops[1].0),
+                                      (NSColor.black.withAlphaComponent(stops[2].1), stops[2].0),
+                                      (NSColor.black.withAlphaComponent(stops[3].1), stops[3].0),
+                                      (NSColor.black, stops[4].0),
                                       (NSColor.black, 1))
             gradient?.draw(in: rect, angle: 90)
             return true
@@ -232,16 +234,20 @@ final class GlassSheet: NSView {
         updateMask()
     }
 
+    /// S-shaped ramp over `fade` points from the bottom: (location fraction, alpha).
+    static func rampStops(fade: CGFloat, height: CGFloat) -> [(CGFloat, CGFloat)] {
+        let f = fade / max(height, 1)
+        return [(0, 0), (f * 0.25, 0.08), (f * 0.5, 0.5), (f * 0.75, 0.92), (f, 1)]
+    }
+
     private func updateMask() {
         guard featherable else { return }
         let height = bounds.height
         guard height > 0 else { return }
-        let toe = PrivacyOverlay.bottomToe
-        let bottom = min(toe + bottomFeather, height * 0.45)
+        let bottom = min(bottomFeather, height * 0.5)
         let top = min(topFeather, height * 0.25)
         let black = NSColor.black
-        // Transparent at the very bottom (the toe below the boundary), ~75% a third of the way up, solid by the end of the feather.
-        var stops: [(CGFloat, CGFloat)] = [(0, 0), (bottom * 0.45 / height, 0.7), (bottom / height, 1)]
+        var stops = Self.rampStops(fade: bottom, height: height)
         if top > 0 {
             stops.append(((height - top) / height, 1))
             stops.append((1, 0))
