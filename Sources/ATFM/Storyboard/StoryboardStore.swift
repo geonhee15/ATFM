@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Model
 
@@ -49,7 +50,7 @@ enum AspectPreset: String, Codable, CaseIterable, Identifiable {
 }
 
 enum ItemKind: String, Codable, CaseIterable, Identifiable {
-    case rect, roundedRect, ellipse, triangle, arrow, star, text
+    case rect, roundedRect, ellipse, triangle, arrow, star, text, image
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -60,6 +61,7 @@ enum ItemKind: String, Codable, CaseIterable, Identifiable {
         case .arrow: return "화살표"
         case .star: return "별"
         case .text: return "텍스트"
+        case .image: return "이미지"
         }
     }
     var symbol: String {
@@ -71,6 +73,7 @@ enum ItemKind: String, Codable, CaseIterable, Identifiable {
         case .arrow: return "arrow.right"
         case .star: return "star"
         case .text: return "textformat"
+        case .image: return "photo"
         }
     }
 }
@@ -87,6 +90,47 @@ struct SceneItem: Identifiable, Codable, Equatable {
     var filled = true
     var text = ""
     var fontSize: Double = 0.09      // fraction of the canvas height
+    var imageFile: String?           // file name inside the storyboard images folder
+}
+
+/// Images dropped onto scenes are copied next to storyboards.json so they survive the originals moving.
+@MainActor
+enum StoryboardImages {
+    static var directory = FileManager.default.temporaryDirectory
+    private static var cache: [String: NSImage] = [:]
+
+    static func url(for file: String) -> URL { directory.appendingPathComponent(file) }
+
+    static func image(named file: String?) -> NSImage? {
+        guard let file else { return nil }
+        if let cached = cache[file] { return cached }
+        guard let image = NSImage(contentsOf: url(for: file)) else { return nil }
+        cache[file] = image
+        return image
+    }
+
+    /// Copies an image file in; returns the stored file name.
+    static func store(fileURL: URL) -> String? {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let ext = fileURL.pathExtension.isEmpty ? "png" : fileURL.pathExtension.lowercased()
+        let name = UUID().uuidString + "." + ext
+        do {
+            try FileManager.default.copyItem(at: fileURL, to: url(for: name))
+            return name
+        } catch { return nil }
+    }
+
+    static func store(data: Data, fileExtension: String) -> String? {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let name = UUID().uuidString + "." + fileExtension
+        guard (try? data.write(to: url(for: name), options: .atomic)) != nil else { return nil }
+        return name
+    }
+
+    static func remove(_ file: String) {
+        cache[file] = nil
+        try? FileManager.default.removeItem(at: url(for: file))
+    }
 }
 
 struct Stroke: Codable, Equatable {
@@ -107,8 +151,14 @@ struct StoryScene: Identifiable, Codable, Equatable {
 struct MusicTrack: Codable, Equatable {
     var path: String
     var duration: Double
-    var cuts: [Double]               // scene boundaries (seconds), count = scenes − 1
+    var cuts: [Double]               // scene boundaries (seconds, absolute in the file), count = scenes − 1
+    var trimStart: Double = 0        // the part of the file that is used
+    var trimEnd: Double?             // nil = to the end
     var name: String { (path as NSString).lastPathComponent }
+    var start: Double { min(max(0, trimStart), duration) }
+    var end: Double { min(max(start + 0.5, trimEnd ?? duration), duration) }
+    var usedDuration: Double { max(0.001, end - start) }
+    var isTrimmed: Bool { start > 0.01 || end < duration - 0.01 }
 }
 
 struct Storyboard: Identifiable, Codable, Equatable {
@@ -123,8 +173,8 @@ struct Storyboard: Identifiable, Codable, Equatable {
     func segment(of index: Int) -> ClosedRange<Double>? {
         guard let music, index >= 0, index < scenes.count else { return nil }
         let cuts = music.cuts
-        let start = index == 0 ? 0 : (index - 1 < cuts.count ? cuts[index - 1] : 0)
-        let end = index == scenes.count - 1 ? music.duration : (index < cuts.count ? cuts[index] : music.duration)
+        let start = index == 0 ? music.start : (index - 1 < cuts.count ? cuts[index - 1] : music.start)
+        let end = index == scenes.count - 1 ? music.end : (index < cuts.count ? cuts[index] : music.end)
         return min(start, end)...max(start, end)
     }
 }
@@ -184,6 +234,7 @@ final class StoryboardStore {
 
     init(directory: URL) {
         fileURL = directory.appendingPathComponent("storyboards.json")
+        StoryboardImages.directory = directory.appendingPathComponent("storyboard-images")
         load()
         if boards.isEmpty { boards = [Self.blankBoard()] ; scheduleSave() }
         if let raw = UserDefaults.standard.string(forKey: Self.selectedKey), let id = UUID(uuidString: raw), boards.contains(where: { $0.id == id }) {
@@ -324,8 +375,63 @@ final class StoryboardStore {
     }
 
     func deleteItem(_ id: UUID) {
+        let file = scene?.items.first { $0.id == id }?.imageFile
         updateScene { $0.items.removeAll { $0.id == id } }
         if selectedItemID == id { selectedItemID = nil }
+        if let file, !boards.contains(where: { $0.scenes.contains { $0.items.contains { $0.imageFile == file } } }) {
+            StoryboardImages.remove(file)
+        }
+    }
+
+    // MARK: Images
+
+    /// Adds a dropped/chosen image file to the current scene (copied into the images folder).
+    @discardableResult
+    func addImage(fileURL: URL, at point: CGPoint? = nil) -> Bool {
+        guard let type = UTType(filenameExtension: fileURL.pathExtension), type.conforms(to: .image),
+              let name = StoryboardImages.store(fileURL: fileURL) else { return false }
+        placeImage(named: name, at: point)
+        return true
+    }
+
+    @discardableResult
+    func addImage(data: Data, typeIdentifier: String, at point: CGPoint? = nil) -> Bool {
+        let type = UTType(typeIdentifier) ?? .png
+        guard NSImage(data: data) != nil, let name = StoryboardImages.store(data: data, fileExtension: type.preferredFilenameExtension ?? "png") else { return false }
+        placeImage(named: name, at: point)
+        return true
+    }
+
+    private func placeImage(named name: String, at point: CGPoint?) {
+        var item = SceneItem(kind: .image)
+        item.imageFile = name
+        item.color = RGBA(r: 1, g: 1, b: 1, a: 1)
+        item.w = 0.42
+        item.h = imageHeight(for: name, width: item.w)
+        if let point { item.x = Double(point.x); item.y = Double(point.y) }
+        updateScene { $0.items.append(item) }
+        selectedItemID = item.id
+        tool = .select
+    }
+
+    /// Height (fraction of the canvas) that keeps the image's own aspect at the given width fraction.
+    func imageHeight(for file: String, width: Double) -> Double {
+        let canvasRatio = Double(scene?.aspect.ratio ?? 16 / 9)
+        guard let image = StoryboardImages.image(named: file), image.size.height > 0 else { return width }
+        let aspect = Double(image.size.width / image.size.height)
+        return min(1, width * canvasRatio / aspect)
+    }
+
+    func chooseImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.message = "장면에 넣을 이미지를 고르세요"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK else { return }
+        for (index, url) in panel.urls.enumerated() {
+            addImage(fileURL: url, at: CGPoint(x: 0.5 + Double(index) * 0.04, y: 0.5 + Double(index) * 0.04))
+        }
     }
 
     func bringToFront(_ id: UUID) {
@@ -386,13 +492,13 @@ final class StoryboardStore {
     static func redistribute(_ music: MusicTrack?, count: Int) -> [Double] {
         guard let music, count > 1 else { return [] }
         if music.cuts.count == count - 1 { return music.cuts }
-        return (1..<count).map { music.duration * Double($0) / Double(count) }
+        return (1..<count).map { music.start + music.usedDuration * Double($0) / Double(count) }
     }
 
     func distributeEvenly() {
         mutate { board in
             guard let music = board.music else { return }
-            board.music?.cuts = (1..<board.scenes.count).map { music.duration * Double($0) / Double(board.scenes.count) }
+            board.music?.cuts = (1..<board.scenes.count).map { music.start + music.usedDuration * Double($0) / Double(board.scenes.count) }
         }
     }
 
@@ -400,13 +506,36 @@ final class StoryboardStore {
     func setCut(_ index: Int, time: Double) {
         mutate { board in
             guard var music = board.music, index >= 0, index < music.cuts.count else { return }
-            let lower = (index == 0 ? 0 : music.cuts[index - 1]) + 0.5
-            let upper = (index == music.cuts.count - 1 ? music.duration : music.cuts[index + 1]) - 0.5
+            let lower = (index == 0 ? music.start : music.cuts[index - 1]) + 0.5
+            let upper = (index == music.cuts.count - 1 ? music.end : music.cuts[index + 1]) - 0.5
             guard lower <= upper else { return }
             music.cuts[index] = min(max(time, lower), upper)
             board.music = music
         }
     }
+
+    /// Chooses which part of the file is used; scene boundaries keep their proportions inside the new range.
+    func setTrim(start: Double? = nil, end: Double? = nil) {
+        mutate { board in
+            guard var music = board.music else { return }
+            let oldStart = music.start, oldSpan = music.usedDuration
+            var newStart = start ?? music.start
+            var newEnd = end ?? music.end
+            newStart = min(max(0, newStart), music.duration - 0.5)
+            newEnd = min(max(newStart + 0.5, newEnd), music.duration)
+            music.trimStart = newStart
+            music.trimEnd = newEnd >= music.duration - 0.01 ? nil : newEnd
+            let newSpan = music.end - music.start
+            music.cuts = music.cuts.map { cut in
+                let fraction = min(max(0, (cut - oldStart) / oldSpan), 1)
+                return music.start + fraction * newSpan
+            }
+            board.music = music
+        }
+        if let music, currentTime < music.start || currentTime > music.end { seek(to: music.start) }
+    }
+
+    func resetTrim() { setTrim(start: 0, end: music?.duration) }
 
     private func loadMusic() {
         stopPlayback()
@@ -414,6 +543,8 @@ final class StoryboardStore {
         guard let music else { waveform = []; return }
         player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: music.path))
         player?.prepareToPlay()
+        player?.currentTime = music.start
+        currentTime = music.start
         if player == nil { musicError = "음악 파일을 찾을 수 없어요: \(music.name)" } else { musicError = nil }
         if waveformPath != music.path {
             waveformPath = music.path
@@ -467,8 +598,8 @@ final class StoryboardStore {
     func togglePlay() { isPlaying ? pause() : play() }
 
     func play() {
-        guard let player else { return }
-        if currentTime >= player.duration - 0.05 { player.currentTime = 0; currentTime = 0 }
+        guard let player, let music else { return }
+        if currentTime >= music.end - 0.05 || currentTime < music.start { player.currentTime = music.start; currentTime = music.start }
         player.play()
         isPlaying = true
         playTimer?.invalidate()
@@ -488,13 +619,14 @@ final class StoryboardStore {
 
     func stopPlayback() {
         pause()
-        player?.currentTime = 0
-        currentTime = 0
+        let start = music?.start ?? 0
+        player?.currentTime = start
+        currentTime = start
     }
 
     func seek(to time: Double) {
-        guard let player else { return }
-        let clamped = min(max(0, time), player.duration)
+        guard let player, let music else { return }
+        let clamped = min(max(music.start, time), music.end)
         player.currentTime = clamped
         currentTime = clamped
     }
@@ -506,9 +638,13 @@ final class StoryboardStore {
     }
 
     private func tickPlayback() {
-        guard let player else { return }
+        guard let player, let music else { return }
         currentTime = player.currentTime
-        if !player.isPlaying { pause(); currentTime = player.duration }
+        if currentTime >= music.end - 0.02 || !player.isPlaying {
+            pause()
+            currentTime = music.end
+            player.currentTime = music.end
+        }
     }
 
     // MARK: Window
@@ -554,7 +690,7 @@ final class StoryboardStore {
 
     // MARK: Sample (screenshots / development)
 
-    func seedSample(musicPath: String?) {
+    func seedSample(musicPath: String?, imagePath: String? = nil) {
         var board = Storyboard(title: "브이로그 인트로", scenes: [])
         var s1 = StoryScene(aspect: .r16x9, background: RGBA(r: 0.96, g: 0.93, b: 0.86))
         s1.items = [
@@ -572,6 +708,11 @@ final class StoryboardStore {
             SceneItem(kind: .text, x: 0.5, y: 0.9, w: 0.8, h: 0.14, color: .white, text: "메뉴 고르기 → 첫 한 모금", fontSize: 0.09),
         ]
         s2.note = "핸드헬드, 컷 빠르게"
+        if let imagePath, let name = StoryboardImages.store(fileURL: URL(fileURLWithPath: imagePath)) {
+            var photo = SceneItem(kind: .image, x: 0.74, y: 0.36, w: 0.36, h: 0.36 * 16 / 9 * 0.75, color: RGBA(r: 1, g: 1, b: 1))
+            photo.imageFile = name
+            s1.items.insert(photo, at: 1)
+        }
         var s3 = StoryScene(aspect: .r16x9, background: .white)
         s3.items = [
             SceneItem(kind: .triangle, x: 0.25, y: 0.55, w: 0.28, h: 0.5, color: RGBA(r: 0.95, g: 0.36, b: 0.33)),

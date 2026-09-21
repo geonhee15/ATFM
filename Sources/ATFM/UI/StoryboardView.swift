@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct StoryboardView: View {
     @Bindable var store: StoryboardStore
@@ -94,7 +95,7 @@ struct StoryboardView: View {
                     }
                 }
                 Spacer()
-                Text(store.tool == .pen ? "드래그해서 그리기" : store.tool == .text ? "클릭한 곳에 텍스트 추가" : "드래그로 이동 · 모서리로 크기 조절")
+                Text(store.tool == .pen ? "드래그해서 그리기" : store.tool == .text ? "클릭한 곳에 텍스트 추가" : "드래그로 이동 · 모서리로 크기 조절 · 이미지 드롭")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 2)
@@ -132,11 +133,14 @@ private struct SceneToolbar: View {
                 .pickerStyle(.segmented).labelsHidden().controlSize(.small).frame(width: 120)
                 .help("선택 / 펜 / 텍스트")
                 Menu {
-                    ForEach(ItemKind.allCases.filter { $0 != .text }) { kind in
+                    ForEach(ItemKind.allCases.filter { $0 != .text && $0 != .image }) { kind in
                         Button { store.tool = .select; store.addItem(kind) } label: { Label(kind.title, systemImage: kind.symbol) }
                     }
+                    Divider()
+                    Button { store.chooseImage() } label: { Label("이미지 파일…", systemImage: "photo") }
+                    Text("이미지는 캔버스에 끌어다 놓아도 돼요")
                 } label: {
-                    Label("도형", systemImage: "plus.square.on.square").font(.system(size: 11, weight: .medium))
+                    Label("추가", systemImage: "plus.square.on.square").font(.system(size: 11, weight: .medium))
                 }
                 .menuStyle(.borderlessButton).fixedSize()
                 Spacer()
@@ -202,14 +206,25 @@ private struct ItemInspector: View {
                 if item.kind == .text {
                     TextField("텍스트", text: Binding(get: { item.text }, set: { text in store.updateItem(item.id) { $0.text = text } }))
                         .textFieldStyle(.roundedBorder).controlSize(.small)
+                } else if item.kind == .image {
+                    Text("이미지").font(.system(size: 12, weight: .medium))
+                    Button("원본 비율로") {
+                        guard let file = item.imageFile else { return }
+                        let h = store.imageHeight(for: file, width: item.w)
+                        store.updateItem(item.id) { $0.h = h }
+                    }
+                    .controlSize(.mini)
+                    Spacer()
                 } else {
                     Text(item.kind.title).font(.system(size: 12, weight: .medium))
                     Toggle("채우기", isOn: Binding(get: { item.filled }, set: { on in store.updateItem(item.id) { $0.filled = on } }))
                         .toggleStyle(.checkbox).controlSize(.small)
                     Spacer()
                 }
-                ColorPicker("", selection: Binding(get: { item.color.color }, set: { color in store.updateItem(item.id) { $0.color = RGBA(color) } }), supportsOpacity: true)
-                    .labelsHidden().controlSize(.small)
+                if item.kind != .image {
+                    ColorPicker("", selection: Binding(get: { item.color.color }, set: { color in store.updateItem(item.id) { $0.color = RGBA(color) } }), supportsOpacity: true)
+                        .labelsHidden().controlSize(.small)
+                }
                 Button { store.bringToFront(item.id) } label: { Image(systemName: "square.3.layers.3d.top.filled") }
                     .buttonStyle(.plain).foregroundStyle(.secondary).help("맨 앞으로")
                 Button { store.deleteItem(item.id) } label: { Image(systemName: "trash") }
@@ -220,6 +235,9 @@ private struct ItemInspector: View {
                 sliderRow("높이", value: Binding(get: { item.h }, set: { v in store.updateItem(item.id) { $0.h = v } }), range: 0.04...1)
                 if item.kind == .text {
                     sliderRow("글자", value: Binding(get: { item.fontSize }, set: { v in store.updateItem(item.id) { $0.fontSize = v } }), range: 0.03...0.3)
+                }
+                if item.kind == .image {
+                    sliderRow("투명", value: Binding(get: { item.color.a }, set: { v in store.updateItem(item.id) { $0.color.a = v } }), range: 0.1...1)
                 }
             }
         }
@@ -247,6 +265,7 @@ struct SceneCanvas: View {
     @State private var dragOrigin = CGPoint.zero
     @State private var dragStart = CGPoint.zero
     @State private var dragBegan = false
+    @State private var dropTargeted = false
 
     var body: some View {
         GeometryReader { geo in
@@ -267,6 +286,19 @@ struct SceneCanvas: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
             .gesture(canvasGesture(size: size), including: interactive && store != nil ? .all : .none)
+            .onDrop(of: [.fileURL, .image, .url], isTargeted: interactive ? $dropTargeted : nil) { providers, location in
+                guard let store, interactive else { return false }
+                return ImageDropHandler.handle(providers, store: store, at: normalized(location, size))
+            }
+            .overlay {
+                if dropTargeted {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.accent.opacity(0.08)))
+                        .overlay(Label("여기에 놓으면 이미지가 추가돼요", systemImage: "photo.badge.plus").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent))
+                        .allowsHitTesting(false)
+                }
+            }
         }
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
     }
@@ -411,6 +443,22 @@ struct SceneItemView: View {
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.3)
                     .frame(width: w, height: h)
+            case .image:
+                if let image = StoryboardImages.image(named: item.imageFile) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: w, height: h)
+                        .clipped()
+                        .opacity(item.color.a)
+                } else {
+                    ZStack {
+                        Rectangle().fill(Color.primary.opacity(0.08))
+                        Image(systemName: "photo").foregroundStyle(.secondary)
+                    }
+                    .frame(width: w, height: h)
+                }
             case .rect: shape(Rectangle())
             case .roundedRect: shape(RoundedRectangle(cornerRadius: min(w, h) * 0.2, style: .continuous))
             case .ellipse: shape(Ellipse())
@@ -537,6 +585,7 @@ private struct SceneStrip: View {
 private struct MusicCard: View {
     @Bindable var store: StoryboardStore
     @Environment(\.colorScheme) private var scheme
+    @State private var showTrim = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -548,13 +597,15 @@ private struct MusicCard: View {
                     .buttonStyle(.plain).foregroundStyle(Theme.accent)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(music.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                        Text("\(StoryboardView.mmss(store.currentTime)) / \(StoryboardView.mmss(music.duration))" + currentSceneText)
+                        Text("\(StoryboardView.mmss(store.currentTime)) / \(StoryboardView.mmss(music.end))" + currentSceneText)
                             .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Menu {
                         Button("다른 음악 고르기…") { store.chooseMusic() }
                         Button("장면 시간 균등 배분") { store.distributeEvenly() }
+                        Button(showTrim ? "사용 구간 숨기기" : "사용 구간 정하기") { showTrim.toggle() }
+                        if music.isTrimmed { Button("전체 곡 사용") { store.resetTrim() } }
                         Divider()
                         Button("음악 제거", role: .destructive) { store.removeMusic() }
                     } label: { Image(systemName: "ellipsis.circle").font(.system(size: 14)) }
@@ -562,7 +613,17 @@ private struct MusicCard: View {
                 }
                 Timeline(store: store, music: music)
                     .frame(height: 58)
-                Text("구분선을 끌어서 장면이 바뀌는 시점을 정하고, 장면을 누르면 그 구간으로 이동해요.")
+                if showTrim || music.isTrimmed {
+                    TrimBar(store: store, music: music)
+                        .frame(height: 30)
+                    HStack {
+                        Text("사용 구간 \(StoryboardView.mmss(music.start))–\(StoryboardView.mmss(music.end)) · \(StoryboardView.mmss(music.usedDuration))")
+                            .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("전체") { store.resetTrim() }.controlSize(.mini).disabled(!music.isTrimmed)
+                    }
+                }
+                Text("구분선을 끌어서 장면이 바뀌는 시점을 정하고, 장면을 누르면 그 구간으로 이동해요. 곡의 일부만 쓰려면 ⋯ › 사용 구간 정하기.")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
             } else {
                 HStack(spacing: 10) {
@@ -596,13 +657,14 @@ private struct Timeline: View {
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width, height = geo.size.height
-            let duration = max(music.duration, 0.001)
+            let origin = music.start
+            let duration = music.usedDuration
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.05))
                 waveform(width: width, height: height)
                 ForEach(store.scenes.indices, id: \.self) { index in
                     if let range = store.board?.segment(of: index) {
-                        let x = range.lowerBound / duration * width
+                        let x = (range.lowerBound - origin) / duration * width
                         let w = max(1, (range.upperBound - range.lowerBound) / duration * width)
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(RGBA.palette[index % RGBA.palette.count].color.opacity(store.playbackSceneIndex == index && store.isPlaying ? 0.5 : 0.28))
@@ -617,7 +679,7 @@ private struct Timeline: View {
                     }
                 }
                 ForEach(music.cuts.indices, id: \.self) { cutIndex in
-                    let x = music.cuts[cutIndex] / duration * width
+                    let x = (music.cuts[cutIndex] - origin) / duration * width
                     Capsule().fill(Color.primary.opacity(0.75))
                         .frame(width: 4, height: height - 6)
                         .overlay(Capsule().strokeBorder(Color.white.opacity(0.9), lineWidth: 1))
@@ -625,33 +687,123 @@ private struct Timeline: View {
                         .contentShape(Rectangle())
                         .offset(x: x - 7, y: 3)
                         .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("timeline")).onChanged { value in
-                            store.setCut(cutIndex, time: value.location.x / width * duration)
+                            store.setCut(cutIndex, time: origin + value.location.x / width * duration)
                         })
                 }
                 Rectangle().fill(Color.red).frame(width: 2, height: height)
-                    .offset(x: store.currentTime / duration * width - 1)
+                    .offset(x: (store.currentTime - origin) / duration * width - 1)
                     .allowsHitTesting(false)
             }
             .coordinateSpace(name: "timeline")
             .contentShape(Rectangle())
             .simultaneousGesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("timeline")).onChanged { value in
-                store.seek(to: value.location.x / width * duration)
+                store.seek(to: origin + value.location.x / width * duration)
             })
         }
     }
 
     private func waveform(width: CGFloat, height: CGFloat) -> some View {
+        WaveformBars(bars: store.waveform, range: music.start / max(music.duration, 0.001)...(music.end / max(music.duration, 0.001)), opacity: 0.22)
+            .frame(width: width, height: height)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Draws the part of the waveform between two fractions of the file.
+private struct WaveformBars: View {
+    let bars: [Float]
+    let range: ClosedRange<Double>
+    var opacity = 0.22
+
+    var body: some View {
         Canvas { context, size in
-            let bars = store.waveform
             guard !bars.isEmpty else { return }
-            let step = size.width / CGFloat(bars.count)
-            for (index, value) in bars.enumerated() {
+            let first = Int(Double(bars.count) * range.lowerBound), last = max(first + 1, Int(Double(bars.count) * range.upperBound))
+            let slice = Array(bars[max(0, first)..<min(bars.count, last)])
+            guard !slice.isEmpty else { return }
+            let step = size.width / CGFloat(slice.count)
+            for (index, value) in slice.enumerated() {
                 let h = max(1, CGFloat(value) * (size.height - 16))
-                let rect = CGRect(x: CGFloat(index) * step, y: (size.height - h) / 2 + 4, width: max(1, step - 1), height: h)
-                context.fill(Path(rect), with: .color(Color.primary.opacity(0.22)))
+                let rect = CGRect(x: CGFloat(index) * step, y: (size.height - h) / 2 + 4, width: max(0.5, step - 1), height: h)
+                context.fill(Path(rect), with: .color(Color.primary.opacity(opacity)))
             }
         }
-        .frame(width: width, height: height)
-        .allowsHitTesting(false)
+    }
+}
+
+/// Whole-file strip with two handles choosing the part of the song that is used.
+private struct TrimBar: View {
+    @Bindable var store: StoryboardStore
+    let music: MusicTrack
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width, height = geo.size.height
+            let duration = max(music.duration, 0.001)
+            let startX = music.start / duration * width
+            let endX = music.end / duration * width
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.primary.opacity(0.05))
+                WaveformBars(bars: store.waveform, range: 0...1, opacity: 0.14).frame(width: width, height: height)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Theme.accent.opacity(0.22))
+                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Theme.accent.opacity(0.8), lineWidth: 1))
+                    .frame(width: max(2, endX - startX), height: height)
+                    .offset(x: startX)
+                    .allowsHitTesting(false)
+                handle(x: startX, symbol: "chevron.left") { x in store.setTrim(start: x / width * duration) }
+                handle(x: endX, symbol: "chevron.right") { x in store.setTrim(end: x / width * duration) }
+            }
+            .coordinateSpace(name: "trim")
+        }
+    }
+
+    private func handle(x: CGFloat, symbol: String, onDrag: @escaping (CGFloat) -> Void) -> some View {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(Theme.accent)
+            .frame(width: 10, height: 26)
+            .overlay(Image(systemName: symbol).font(.system(size: 7, weight: .bold)).foregroundStyle(.white))
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+            .offset(x: x - 9)
+            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("trim")).onChanged { value in onDrag(value.location.x) })
+    }
+}
+
+
+// MARK: - Image drop
+
+@MainActor
+enum ImageDropHandler {
+    /// Finder files, images dragged from browsers (data), or http(s) image links.
+    static func handle(_ providers: [NSItemProvider], store: StoryboardStore, at point: CGPoint) -> Bool {
+        var accepted = false
+        for (index, provider) in providers.enumerated() {
+            let offset = CGPoint(x: min(0.95, point.x + Double(index) * 0.04), y: min(0.95, point.y + Double(index) * 0.04))
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                accepted = true
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                    guard let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    Task { @MainActor in store.addImage(fileURL: url, at: offset) }
+                }
+            } else if let type = provider.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .image) ?? false }) {
+                accepted = true
+                provider.loadDataRepresentation(forTypeIdentifier: type) { data, _ in
+                    guard let data else { return }
+                    Task { @MainActor in store.addImage(data: data, typeIdentifier: type, at: offset) }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                accepted = true
+                provider.loadItem(forTypeIdentifier: UTType.url.identifier) { item, _ in
+                    guard let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil), url.scheme?.hasPrefix("http") == true else { return }
+                    URLSession.shared.dataTask(with: url) { data, response, _ in
+                        guard let data, let mime = (response as? HTTPURLResponse)?.mimeType, mime.hasPrefix("image/") else { return }
+                        let type = UTType(mimeType: mime)?.identifier ?? UTType.png.identifier
+                        Task { @MainActor in store.addImage(data: data, typeIdentifier: type, at: offset) }
+                    }.resume()
+                }
+            }
+        }
+        return accepted
     }
 }

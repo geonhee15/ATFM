@@ -86,7 +86,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let storyboards = StoryboardStore(directory: store.directory)
         self.storyboards = storyboards
         if ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_SAMPLE"] == "1" {
-            storyboards.seedSample(musicPath: ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_MUSIC"])
+            storyboards.seedSample(musicPath: ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_MUSIC"],
+                                   imagePath: ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_IMAGE"])
+            if let trim = ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_TRIM"] {   // "5,30" seconds
+                let parts = trim.split(separator: ",").compactMap { Double($0) }
+                if parts.count == 2 { storyboards.setTrim(start: parts[0], end: parts[1]) }
+            }
         }
         let dates = DateStore(directory: store.directory)
         self.dates = dates
