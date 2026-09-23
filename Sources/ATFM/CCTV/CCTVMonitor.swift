@@ -299,13 +299,21 @@ final class CCTVMonitor {
     }
 
     private func startStream() {
-        guard let url = URL(string: streamURL.trimmingCharacters(in: .whitespaces)), url.scheme != nil else {
+        guard let url = MJPEGClient.normalize(streamURL), url.host != nil else {
             status = "스트림 주소를 입력해 주세요 (예: http://192.168.0.12:8080/video)"
             return
         }
         status = "연결 중… \(url.host ?? "")"
+        errorText = nil
         let client = MJPEGClient(url: url)
         client.onFrame = { [weak self] image in Task { @MainActor in self?.handleImage(image) } }
+        client.onConnected = { [weak self] connected in
+            Task { @MainActor in
+                guard let self else { return }
+                self.status = "실시간 · \(connected.host ?? "")\(connected.path)"
+                if connected.absoluteString != self.streamURL { self.streamURL = connected.absoluteString }   // remember the endpoint that worked
+            }
+        }
         client.onError = { [weak self] message in Task { @MainActor in self?.errorText = message; self?.status = "스트림 연결 실패"; self?.isRunning = false } }
         client.start()
         mjpeg = client
@@ -595,24 +603,84 @@ final class MotionDetector: @unchecked Sendable {
 final class MJPEGClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     var onFrame: ((NSImage) -> Void)?
     var onError: ((String) -> Void)?
-    private let url: URL
+    var onConnected: ((URL) -> Void)?
+    private let candidates: [URL]
+    private var index = 0
     private var session: URLSession?
     private var buffer = Data()
+    private var gotFrame = false
+    private var sawHTML = false
 
-    init(url: URL) { self.url = url }
+    /// Endpoints tried after the exact URL when it has no path: IP Webcam, DroidCam, generic MJPEG servers.
+    static let commonPaths = ["/video", "/videofeed", "/mjpeg", "/mjpg/video.mjpg", "/stream", "/cam/1/stream", "/?action=stream"]
 
-    func start() {
+    init(url: URL) {
+        var list = [url]
+        let path = url.path
+        if path.isEmpty || path == "/" {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            for extra in Self.commonPaths {
+                let parts = extra.split(separator: "?", maxSplits: 1)
+                components?.path = String(parts[0])
+                components?.query = parts.count > 1 ? String(parts[1]) : nil
+                if let candidate = components?.url { list.append(candidate) }
+            }
+        }
+        candidates = list
+    }
+
+    /// Adds the scheme when the user typed a bare host, and never tries TLS on a plain IP-camera port.
+    static func normalize(_ text: String) -> URL? {
+        var string = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !string.contains("://") { string = "http://" + string }
+        if string.hasPrefix("https://"), let host = URL(string: string)?.host, host.allSatisfy({ $0.isNumber || $0 == "." }) {
+            string = "http://" + string.dropFirst("https://".count)      // IP camera apps serve plain http
+        }
+        return URL(string: string)
+    }
+
+    func start() { connect() }
+
+    private func connect() {
+        guard index < candidates.count else {
+            onError?(sawHTML ? "주소가 웹페이지예요. 앱이 알려주는 영상 주소(예: IP Webcam은 …:8080/video)를 넣어 주세요"
+                             : "영상 스트림을 찾지 못했어요. 폰 앱의 서버가 켜져 있고 같은 Wi-Fi인지 확인해 주세요")
+            return
+        }
+        buffer.removeAll()
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForRequest = 8
         config.timeoutIntervalForResource = .infinity
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
         let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         self.session = session
-        session.dataTask(with: url).resume()
+        session.dataTask(with: candidates[index]).resume()
+    }
+
+    private func tryNext() {
+        session?.invalidateAndCancel()
+        session = nil
+        index += 1
+        connect()
     }
 
     func stop() {
         session?.invalidateAndCancel()
         session = nil
+        index = candidates.count
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let http = response as? HTTPURLResponse
+        let type = (http?.value(forHTTPHeaderField: "Content-Type") ?? response.mimeType ?? "").lowercased()
+        if let code = http?.statusCode, code >= 400 {
+            completionHandler(.cancel); tryNext(); return
+        }
+        if type.contains("text/html") {
+            sawHTML = true
+            completionHandler(.cancel); tryNext(); return
+        }
+        completionHandler(.allow)
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
@@ -621,12 +689,23 @@ final class MJPEGClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         while let start = buffer.range(of: Data([0xFF, 0xD8, 0xFF])), let end = buffer.range(of: Data([0xFF, 0xD9]), in: start.upperBound..<buffer.endIndex) {
             let frame = buffer.subdata(in: start.lowerBound..<end.upperBound)
             buffer.removeSubrange(buffer.startIndex..<end.upperBound)
-            if let image = NSImage(data: frame) { onFrame?(image) }
+            if let image = NSImage(data: frame) {
+                if !gotFrame { gotFrame = true; onConnected?(candidates[index]) }
+                onFrame?(image)
+            }
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error, (error as NSError).code != NSURLErrorCancelled { onError?(error.localizedDescription) }
+        guard let error, (error as NSError).code != NSURLErrorCancelled else { return }
+        if !gotFrame, index + 1 < candidates.count { tryNext(); return }
+        let ns = error as NSError
+        var message = error.localizedDescription
+        if ns.code == NSURLErrorAppTransportSecurityRequiresSecureConnection { message = "http 연결이 막혔어요 (앱 전송 보안)" }
+        if ns.code == NSURLErrorCannotConnectToHost || ns.code == NSURLErrorTimedOut {
+            message += " · 폰 앱의 서버가 켜져 있고 Mac과 같은 Wi-Fi인지, 시스템 설정 › 개인정보 보호 › 로컬 네트워크에서 ATFM이 허용됐는지 확인"
+        }
+        onError?(message)
     }
 }
 

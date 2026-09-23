@@ -378,6 +378,21 @@ enum Probe {
             } else { print("no image for window \(what)") }
             return
         }
+        if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_STREAM"] {   // MJPEG url: connect for 6 s and report
+            guard let url = MJPEGClient.normalize(spec) else { print("bad url"); return }
+            print("normalized: \(url.absoluteString)")
+            let client = MJPEGClient(url: url)
+            var frames = 0
+            client.onConnected = { print("connected: \($0.absoluteString)") }
+            client.onFrame = { image in frames += 1; if frames == 1 { print("first frame \(Int(image.size.width))x\(Int(image.size.height))") } }
+            client.onError = { print("error: \($0)") }
+            client.start()
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+            client.stop()
+            print("frames in 6 s: \(frames)")
+            return
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_CCTV"] == "1" {
             let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.continuityCamera, .builtInWideAngleCamera, .external], mediaType: .video, position: .unspecified)
             print("camera permission: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue) (3 = authorized)")
