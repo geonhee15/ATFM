@@ -384,7 +384,7 @@ enum Probe {
             let client = MJPEGClient(url: url)
             var frames = 0
             client.onConnected = { print("connected: \($0.absoluteString)") }
-            client.onFrame = { image in frames += 1; if frames == 1 { print("first frame \(Int(image.size.width))x\(Int(image.size.height))") } }
+            client.onFrame = { image, _ in frames += 1; if frames == 1 { print("first frame \(Int(image.size.width))x\(Int(image.size.height))") } }
             client.onError = { print("error: \($0)") }
             client.start()
             let deadline = Date().addingTimeInterval(6)

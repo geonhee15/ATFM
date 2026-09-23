@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import CoreImage
+import ImageIO
 import Observation
 import SwiftUI
 import UserNotifications
@@ -248,6 +249,8 @@ final class CCTVMonitor {
         }
         mjpeg?.stop()
         mjpeg = nil
+        stallTimer?.invalidate()
+        stallTimer = nil
         reconnectTask?.cancel()
         reconnectTask = nil
         reconnectAttempts = 0
@@ -321,7 +324,11 @@ final class CCTVMonitor {
         status = reconnectAttempts == 0 ? "연결 중… \(url.host ?? "")" : "재연결 중… \(reconnectAttempts)회"
         debugLog?("stream connect attempt \(reconnectAttempts) \(url.absoluteString)")
         let client = MJPEGClient(url: url)
-        client.onFrame = { [weak self] image in Task { @MainActor in self?.handleImage(image) } }
+        client.onFrame = { [weak self] image, cg in
+            guard let self else { return }
+            let level = self.detector.process(cgImage: cg)      // background: the decoded bitmap is already here
+            Task { @MainActor in self.handleStreamFrame(image, level: level) }
+        }
         client.onConnected = { [weak self] connected in
             Task { @MainActor in
                 guard let self else { return }
@@ -337,6 +344,7 @@ final class CCTVMonitor {
         client.start()
         mjpeg = client
         isRunning = true
+        startStallWatchdog()
     }
 
     /// Streams drop when the phone sleeps or the app is paused: keep the last frame and retry with backoff
@@ -346,6 +354,8 @@ final class CCTVMonitor {
         debugLog?("stream failed: \(message)")
         mjpeg?.stop()
         mjpeg = nil
+        stallTimer?.invalidate()
+        stallTimer = nil
         fps = 0
         motionLevel = 0
         reconnectAttempts += 1
@@ -391,13 +401,49 @@ final class CCTVMonitor {
         }
     }
 
-    /// Main-actor path (stream / sample modes).
+    /// Main-actor path (sample mode: motion is computed here, frames are small).
     private func handleImage(_ image: NSImage) {
         latestImage = image
         if frameSize != image.size { frameSize = image.size }
         frameCounter += 1
         if frameCounter % 2 == 0 { publishMotion(detector.process(image: image)) }
         if frameCounter % 10 == 0 { fps = sourceMode == .sample ? 10 : fps }
+    }
+
+    @ObservationIgnored private var lastFrameAt = Date.distantPast
+    @ObservationIgnored private var streamFrameCount = 0
+    @ObservationIgnored private var streamFPSWindow = Date()
+    @ObservationIgnored private var stallTimer: Timer?
+
+    /// Stream mode: frame already decoded and analysed off-main; just publish.
+    private func handleStreamFrame(_ image: NSImage, level: Double) {
+        lastFrameAt = Date()
+        latestImage = image
+        if frameSize != image.size { frameSize = image.size }
+        streamFrameCount += 1
+        let elapsed = Date().timeIntervalSince(streamFPSWindow)
+        if elapsed >= 1 { fps = Double(streamFrameCount) / elapsed; streamFrameCount = 0; streamFPSWindow = Date() }
+        if status.hasPrefix("영상 멈춤") { status = "실시간 · \(URL(string: streamURL)?.host ?? "")" }
+        publishMotion(level)
+    }
+
+    /// Frozen picture watchdog: the phone can keep the socket open while sending nothing (screen off, app paused).
+    private func startStallWatchdog() {
+        stallTimer?.invalidate()
+        lastFrameAt = Date()
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.sourceMode == .stream, self.isRunning, !self.isReconnecting else { return }
+                let silent = Date().timeIntervalSince(self.lastFrameAt)
+                if silent > 12 {
+                    self.streamFailed("영상이 \(Int(silent))초 동안 멈춰서 다시 연결해요")
+                } else if silent > 3 {
+                    self.status = "영상 멈춤 · 마지막 프레임 \(Int(silent))초 전"
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        stallTimer = timer
     }
 
     private func publishMotion(_ level: Double) {
@@ -622,6 +668,10 @@ final class MotionDetector: @unchecked Sendable {
 
     func process(image: NSImage) -> Double {
         guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return 0 }
+        return process(cgImage: cg)
+    }
+
+    func process(cgImage cg: CGImage) -> Double {
         var grid = [UInt8](repeating: 0, count: columns * rows)
         guard let context = CGContext(data: &grid, width: columns, height: rows, bitsPerComponent: 8, bytesPerRow: columns,
                                       space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return 0 }
@@ -643,7 +693,11 @@ final class MotionDetector: @unchecked Sendable {
 /// Reads an MJPEG (multipart JPEG) HTTP stream and hands back decoded frames. Works with most
 /// "IP camera" phone apps (IP Webcam, DroidCam, EpocCam…) that expose an http://…/video URL.
 final class MJPEGClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    var onFrame: ((NSImage) -> Void)?
+    /// Decoded frame (bitmap already in memory, so the main thread only draws it).
+    var onFrame: ((NSImage, CGImage) -> Void)?
+    private var lastDelivered = Date.distantPast
+    /// Display rate cap; the phone may send 30 fps of 1080p and the bubble doesn't need all of it.
+    var maxFPS: Double = 15
     var onError: ((String) -> Void)?
     var onConnected: ((URL) -> Void)?
     private let candidates: [URL]
@@ -731,10 +785,13 @@ final class MJPEGClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         while let start = buffer.range(of: Data([0xFF, 0xD8, 0xFF])), let end = buffer.range(of: Data([0xFF, 0xD9]), in: start.upperBound..<buffer.endIndex) {
             let frame = buffer.subdata(in: start.lowerBound..<end.upperBound)
             buffer.removeSubrange(buffer.startIndex..<end.upperBound)
-            if let image = NSImage(data: frame) {
-                if !gotFrame { gotFrame = true; onConnected?(candidates[index]) }
-                onFrame?(image)
-            }
+            let now = Date()
+            if gotFrame, now.timeIntervalSince(lastDelivered) < 1 / maxFPS { continue }   // parsed, but not worth drawing
+            guard let source = CGImageSourceCreateWithData(frame as CFData, nil),
+                  let cg = CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCache: true] as CFDictionary) else { continue }
+            lastDelivered = now
+            if !gotFrame { gotFrame = true; onConnected?(candidates[index]) }
+            onFrame?(NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)), cg)
         }
     }
 
@@ -751,7 +808,9 @@ final class MJPEGClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         let ns = error as NSError
         var message = error.localizedDescription
         if ns.code == NSURLErrorAppTransportSecurityRequiresSecureConnection { message = "http 연결이 막혔어요 (앱 전송 보안)" }
-        if ns.code == NSURLErrorCannotConnectToHost || ns.code == NSURLErrorTimedOut {
+        if gotFrame, ns.code == NSURLErrorTimedOut || ns.code == NSURLErrorNetworkConnectionLost {
+            message = "폰에서 영상이 더 안 와요 (잠들었거나 앱이 멈춘 듯) · 자동으로 다시 연결해요"
+        } else if ns.code == NSURLErrorCannotConnectToHost || ns.code == NSURLErrorTimedOut {
             message += " · 폰 앱의 서버가 켜져 있고 Mac과 같은 Wi-Fi인지, 시스템 설정 › 개인정보 보호 › 로컬 네트워크에서 ATFM이 허용됐는지 확인"
         }
         onError?(message)
