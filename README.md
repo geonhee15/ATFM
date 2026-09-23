@@ -194,7 +194,8 @@
   - **Android 폰 · 멀리 있는 폰**: 폰에 IP 카메라 앱(Android는 IP Webcam, iPhone은 DroidCam 등)을 깔고 그 앱의 MJPEG 주소
     (`http://192.168.0.12:8080/video` 같은)를 넣으면 같은 Wi-Fi에서 그 스트림을 표시. 주소만 넣어도(`http://…:8080`) /video · /videofeed ·
     /mjpeg 같은 흔한 경로를 차례로 시도해 되는 곳을 기억하고, 웹페이지가 오면 그렇다고 알려줌. 집 밖에서는 앱의 터널 기능이나 Tailscale 같은 VPN으로.
-    Info.plist에 로컬 네트워크·http 허용(ATS)이 들어 있고, macOS가 묻는 "로컬 네트워크" 권한을 허용해야 함
+    Info.plist에 로컬 네트워크·http 허용(ATS)이 들어 있고, macOS가 묻는 "로컬 네트워크" 권한을 허용해야 함. 폰이 잠들거나 앱이 멈춰 스트림이
+    끊기면 마지막 화면을 유지한 채 3·5·8·12·15초 간격으로 자동 재연결(시작을 끄기 전까지)
   - **움직임 감지**: 프레임을 32×18 격자 밝기로 비교해 바뀐 칸 비율로 판단(민감도 슬라이더: 최대 0.5% ~ 기본 5% ~ 최소 10%). 감지되면 상단 팝업 + macOS 알림,
     스냅샷 저장(사진 › ATFM CCTV), 켜 두면 10초 클립 녹화(동영상 › ATFM CCTV, 마지막 움직임 후 10초 뒤 종료). 감지 기록 목록(썸네일·시각).
     움직임 감지를 켜 두면 말풍선을 닫아도 카메라가 계속 돌고, 끄면 탭을 벗어날 때 자동으로 멈춰 폰 배터리를 아낌
@@ -273,7 +274,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
-| `ATFM_DEBUG_CCTV_SAMPLE=1` | 퀵 CCTV를 생성한 샘플 영상(6초마다 지나가는 방문자)으로 시작하고 움직임 감지를 켭니다 (설정은 저장하지 않음); `ATFM_PROBE_CCTV=1 ATFM --probe`는 보이는 카메라와 권한 상태 출력, `ATFM_PROBE_STREAM=<url>`은 MJPEG 주소에 6초 연결해 찾은 경로·프레임 수 출력 |
+| `ATFM_DEBUG_CCTV_SAMPLE=1` · `ATFM_DEBUG_CCTV_STREAM=<url>` (+`ATFM_DEBUG_CCTV_LOG=1`) | 퀵 CCTV를 생성한 샘플 영상(6초마다 지나가는 방문자) 또는 지정한 MJPEG 주소로 시작하고 움직임 감지를 켭니다 (설정은 저장하지 않음, LOG는 연결/재연결 기록); `ATFM_PROBE_CCTV=1 ATFM --probe`는 보이는 카메라와 권한 상태 출력, `ATFM_PROBE_STREAM=<url>`은 MJPEG 주소에 6초 연결해 찾은 경로·프레임 수 출력 |
 | `ATFM_DEBUG_MEMO=notes\|storyboard` · `ATFM_DEBUG_STORYBOARD_SAMPLE=1` (+`ATFM_DEBUG_STORYBOARD_MUSIC=/path.wav` · `_IMAGE=/path.png` · `_TRIM=4,34`) | 메모 탭의 섹션을 고르고, 도형·텍스트·스케치가 든 샘플 스토리보드(선택 시 배경음악까지)를 만들어 둡니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari\|reels\|reels-script` | 쇼츠/릴스 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
 | `ATFM_DEBUG_PRIVACY_SAMPLE=1` (+`ATFM_SNAPSHOT_PRIVACY=/path.png`) | 가짜 메신저 창을 띄우고 채팅 프라이버시 유리판을 올린 뒤 그 영역을 캡처합니다; `ATFM_PROBE_PRIVACY=cluster\|sample\|windows\|browser\|dom\|<창 ID> ATFM --probe`는 메시지 묶기 자체 테스트 / 샘플 채팅을 오프스크린으로 그려 헤더·공지·경계 분석 / 메신저 창 목록(제목 가림) / 브라우저 앞 탭이 Google Chat인지 / Google Chat 탭의 페이지 구조(역할·좌표만) / 실제 창 분석 결과 출력 |

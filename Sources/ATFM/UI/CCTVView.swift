@@ -14,7 +14,16 @@ struct CCTVView: View {
                 previewCard
                 controls
                 if monitor.permissionDenied { permissionCard }
-                if let error = monitor.errorText { Text(error).font(.system(size: 11)).foregroundStyle(.orange).padding(.horizontal, 4) }
+                if let error = monitor.errorText {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(error).font(.system(size: 11)).foregroundStyle(.orange)
+                    if monitor.sourceMode == .stream {
+                        Text("폰 쪽: IP 카메라 앱이 꺼지거나 화면이 꺼지며 잠들면 스트림이 끊겨요. IP Webcam이면 설정 › '백그라운드에서 실행'과 배터리 최적화 제외를 켜고, 연결되면 여기서 자동으로 다시 붙어요.")
+                            .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
                 motionCard
                 if !monitor.events.isEmpty { eventsCard }
                 guideCard
@@ -76,6 +85,10 @@ struct CCTVView: View {
                     .font(.system(size: 10, weight: .medium)).foregroundStyle(.white)
                     .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.45)))
                 Spacer()
+                if monitor.isReconnecting {
+                    Label("재연결 중", systemImage: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.orange.opacity(0.8)))
+                }
                 if monitor.isRecording {
                     HStack(spacing: 4) {
                         Circle().fill(Color.red).frame(width: 7, height: 7)

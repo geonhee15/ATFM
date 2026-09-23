@@ -33,7 +33,7 @@ final class CCTVMonitor {
         didSet { UserDefaults.standard.set(selectedCameraID, forKey: "cctvCamera"); if userStarted { restart() } }
     }
     var streamURL: String {
-        didSet { UserDefaults.standard.set(streamURL, forKey: "cctvStreamURL") }
+        didSet { if persistSettings { UserDefaults.standard.set(streamURL, forKey: "cctvStreamURL") } }
     }
     var sourceMode: SourceMode {
         didSet { if persistSettings { UserDefaults.standard.set(sourceMode.rawValue, forKey: "cctvSource") }; if userStarted { restart() } }
@@ -69,6 +69,7 @@ final class CCTVMonitor {
     }
 
     @ObservationIgnored let session = AVCaptureSession()
+    @ObservationIgnored var debugLog: ((String) -> Void)?
     @ObservationIgnored var notify: ((String, String) -> Void)?
     @ObservationIgnored private let queue = DispatchQueue(label: "atfm.cctv", qos: .userInitiated)
     @ObservationIgnored private let tap = FrameTap()
@@ -77,6 +78,9 @@ final class CCTVMonitor {
     @ObservationIgnored private let detector = MotionDetector()
     @ObservationIgnored private var tabVisible = false
     @ObservationIgnored private var mjpeg: MJPEGClient?
+    @ObservationIgnored private var reconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var reconnectAttempts = 0
+    private(set) var isReconnecting = false
     @ObservationIgnored private var sampleTimer: Timer?
     @ObservationIgnored private var sampleTick = 0
     @ObservationIgnored private var clipStopTask: Task<Void, Never>?
@@ -107,7 +111,14 @@ final class CCTVMonitor {
             sourceMode = .sample
             motionEnabled = true
             start()
+        } else if let url = ProcessInfo.processInfo.environment["ATFM_DEBUG_CCTV_STREAM"] {   // MJPEG url, nothing persisted
+            persistSettings = false
+            streamURL = url
+            sourceMode = .stream
+            motionEnabled = true
+            start()
         }
+        if ProcessInfo.processInfo.environment["ATFM_DEBUG_CCTV_LOG"] == "1" { debugLog = { NSLog("ATFM cctv: %@", $0) } }
     }
 
     // MARK: Cameras
@@ -237,6 +248,10 @@ final class CCTVMonitor {
         }
         mjpeg?.stop()
         mjpeg = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempts = 0
+        isReconnecting = false
         sampleTimer?.invalidate()
         sampleTimer = nil
         isRunning = false
@@ -303,21 +318,48 @@ final class CCTVMonitor {
             status = "스트림 주소를 입력해 주세요 (예: http://192.168.0.12:8080/video)"
             return
         }
-        status = "연결 중… \(url.host ?? "")"
-        errorText = nil
+        status = reconnectAttempts == 0 ? "연결 중… \(url.host ?? "")" : "재연결 중… \(reconnectAttempts)회"
+        debugLog?("stream connect attempt \(reconnectAttempts) \(url.absoluteString)")
         let client = MJPEGClient(url: url)
         client.onFrame = { [weak self] image in Task { @MainActor in self?.handleImage(image) } }
         client.onConnected = { [weak self] connected in
             Task { @MainActor in
                 guard let self else { return }
+                self.reconnectAttempts = 0
+                self.isReconnecting = false
+                self.errorText = nil
                 self.status = "실시간 · \(connected.host ?? "")\(connected.path)"
+                self.debugLog?("stream connected \(connected.absoluteString)")
                 if connected.absoluteString != self.streamURL { self.streamURL = connected.absoluteString }   // remember the endpoint that worked
             }
         }
-        client.onError = { [weak self] message in Task { @MainActor in self?.errorText = message; self?.status = "스트림 연결 실패"; self?.isRunning = false } }
+        client.onError = { [weak self] message in Task { @MainActor in self?.streamFailed(message) } }
         client.start()
         mjpeg = client
         isRunning = true
+    }
+
+    /// Streams drop when the phone sleeps or the app is paused: keep the last frame and retry with backoff
+    /// (3 · 5 · 8 · 12 · 15 s) for as long as the user leaves it started.
+    private func streamFailed(_ message: String) {
+        guard userStarted, sourceMode == .stream else { return }
+        debugLog?("stream failed: \(message)")
+        mjpeg?.stop()
+        mjpeg = nil
+        fps = 0
+        motionLevel = 0
+        reconnectAttempts += 1
+        isReconnecting = true
+        errorText = message
+        let delays: [Double] = [3, 5, 8, 12, 15]
+        let delay = delays[min(reconnectAttempts - 1, delays.count - 1)]
+        status = "연결이 끊겨 \(Int(delay))초 뒤 다시 시도 (\(reconnectAttempts)회)"
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, self.userStarted, self.sourceMode == .stream, self.wantsRunning else { return }
+            self.startStream()
+        }
     }
 
     private func startSample() {
@@ -697,7 +739,14 @@ final class MJPEGClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error, (error as NSError).code != NSURLErrorCancelled else { return }
+        guard let error else {
+            // Clean close: the server stopped (phone app paused/quit). Treat it like a drop so the owner reconnects.
+            if gotFrame { onError?("스트림이 끊겼어요 (폰 쪽에서 연결을 닫음)") }
+            else if index + 1 < candidates.count { tryNext() }
+            else { onError?("영상 없이 연결이 끝났어요. 폰 앱의 서버가 켜져 있는지 확인해 주세요") }
+            return
+        }
+        guard (error as NSError).code != NSURLErrorCancelled else { return }
         if !gotFrame, index + 1 < candidates.count { tryNext(); return }
         let ns = error as NSError
         var message = error.localizedDescription
