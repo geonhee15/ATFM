@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let screenTools = ScreenTools()
     private let autoScroller = AutoScroller()
     private let chatPrivacy = ChatPrivacyMode()
+    private let cctv = CCTVMonitor()
     private var privacySampleWindow: NSWindow?
     private let dictionary = DictionaryHub()
     private let calculator = CalculatorModel()
@@ -70,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.networkMonitor = networkMonitor
         appState.quickActions = quickActions
         appState.soundPanel = soundPanel
+        appState.cctv = cctv
         let cleaner = AppCleaner(resolver: identityResolver, network: networkMonitor)
         cleaner.restoreMonitors = { [weak self] in self?.appState.updateMonitors() }
         cleaner.playingBundleID = { [weak self] in
@@ -113,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, storyboards: storyboards, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -143,6 +145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .pickColor: { [weak self] in self?.screenTools.pickColor() },
             .chatPrivacy: { [weak self] in self?.chatPrivacy.toggle() },
         ]
+        cctv.notify = { [weak self] title, message in
+            self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "web.camera"), duration: 2.5)
+        }
         chatPrivacy.onToggled = { [weak self] on in
             self?.screenTools.hud.show(.message(on ? "채팅 프라이버시 켬" : "채팅 프라이버시 끔", symbol: on ? "eye.slash.fill" : "eye"), duration: 1.4)
         }
@@ -405,6 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         screenTools.hotkeys.unregisterAll()
         autoScroller.stop()
         chatPrivacy.stop()
+        cctv.stop()
         notes?.flush()
         storyboards?.flush()
         soundPanel.stopAll()

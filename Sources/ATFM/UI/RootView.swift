@@ -16,6 +16,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case tools
     case autoscroll
     case privacy
+    case cctv
     case convert
     case player
     case sound
@@ -41,6 +42,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .tools: return "wand.and.stars"
         case .autoscroll: return "play.square.stack"
         case .privacy: return "eye.slash"
+        case .cctv: return "web.camera"
         case .convert: return "arrow.triangle.2.circlepath"
         case .player: return "music.note"
         case .sound: return "speaker.wave.2"
@@ -66,6 +68,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .tools: return "빠른 툴"
         case .autoscroll: return "자동 스크롤"
         case .privacy: return "채팅 프라이버시"
+        case .cctv: return "퀵 CCTV"
         case .convert: return "파일 변환"
         case .player: return "미니 플레이어"
         case .sound: return "사운드"
@@ -100,6 +103,7 @@ struct RootView: View {
     var screenTools: ScreenTools
     var autoScroller: AutoScroller
     var chatPrivacy: ChatPrivacyMode
+    var cctv: CCTVMonitor
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
     var sound: SoundPanel
@@ -152,6 +156,8 @@ struct RootView: View {
                     AutoScrollView(scroller: autoScroller)
                 case .privacy:
                     ChatPrivacyView(privacy: chatPrivacy, hotkeys: screenTools.hotkeys)
+                case .cctv:
+                    CCTVView(monitor: cctv)
                 case .convert:
                     ConvertView(converter: converter, downloader: downloader)
                 case .player:

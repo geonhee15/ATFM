@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import CoreAudio
 import Translation
 
@@ -375,6 +376,15 @@ enum Probe {
                     print("window \(id): \(image.width)x\(image.height) messages=\(r.messageCount) clear=\(Int(r.clearHeight)) coverTop=\(Int(r.cover.maxY)) header=\(r.detectedHeader) notice=\(Int(r.noticeHeight)) blocks=\(r.blocks.map { "\(Int($0.bottom))-\(Int($0.top))" })")
                 } else { print("analysis failed") }
             } else { print("no image for window \(what)") }
+            return
+        }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_CCTV"] == "1" {
+            let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.continuityCamera, .builtInWideAngleCamera, .external], mediaType: .video, position: .unspecified)
+            print("camera permission: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue) (3 = authorized)")
+            for device in discovery.devices {
+                print("  \(device.localizedName) type=\(device.deviceType.rawValue) connected=\(device.isConnected) formats=\(device.formats.count)")
+            }
+            if discovery.devices.isEmpty { print("  (no cameras)") }
             return
         }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_HOTKEY"] == "1" {

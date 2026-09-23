@@ -15,6 +15,7 @@ final class AppState {
     @ObservationIgnored var networkMonitor: NetworkMonitor?
     @ObservationIgnored var quickActions: QuickActions?
     @ObservationIgnored var soundPanel: SoundPanel?
+    @ObservationIgnored var cctv: CCTVMonitor?
     @ObservationIgnored var applyAppearance: ((AppearanceMode) -> Void)?
     @ObservationIgnored var resizeBubble: ((BubbleResizeDelta) -> Void)?
     @ObservationIgnored var resetBubbleSize: (() -> Void)?
@@ -47,5 +48,6 @@ final class AppState {
         networkMonitor?.setActive(isBubbleVisible && tab == .network)
         if isBubbleVisible && tab == .actions { quickActions?.refresh() }
         soundPanel?.setActive(isBubbleVisible && tab == .sound)
+        cctv?.setTabVisible(isBubbleVisible && tab == .cctv)
     }
 }
