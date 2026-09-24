@@ -1,17 +1,29 @@
+import AppKit
 import Foundation
 import Observation
 
 struct QuickNote: Identifiable, Codable, Equatable {
     let id: UUID
     var text: String
+    var rich: Data?              // NSAttributedString archive (bold · italic · underline · strikethrough); nil = plain text
     var createdAt: Date
     var updatedAt: Date
 
-    init(id: UUID = UUID(), text: String = "", createdAt: Date = Date(), updatedAt: Date = Date()) {
+    init(id: UUID = UUID(), text: String = "", rich: Data? = nil, createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
         self.text = text
+        self.rich = rich
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    var attributed: NSAttributedString {
+        if let rich, let stored = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSAttributedString.self, from: rich) { return stored }
+        return NSAttributedString(string: text)
+    }
+
+    static func archive(_ attributed: NSAttributedString) -> Data? {
+        try? NSKeyedArchiver.archivedData(withRootObject: attributed, requiringSecureCoding: true)
     }
 
     /// First non-empty line, used as the chip label.
@@ -73,8 +85,55 @@ final class QuickNotesStore {
     func update(text: String) {
         guard let index = notes.firstIndex(where: { $0.id == selectedID }), notes[index].text != text else { return }
         notes[index].text = text
+        notes[index].rich = nil
         notes[index].updatedAt = Date()
         scheduleSave()
+    }
+
+    /// Rich edits from the editor: keeps the plain text for chips/search and the archive for formatting.
+    func update(attributed: NSAttributedString) {
+        guard let index = notes.firstIndex(where: { $0.id == selectedID }) else { return }
+        let plain = attributed.string
+        let hasFormatting = Self.hasFormatting(attributed)
+        let archive = hasFormatting ? QuickNote.archive(attributed) : nil
+        guard notes[index].text != plain || notes[index].rich != archive else { return }
+        notes[index].text = plain
+        notes[index].rich = archive
+        notes[index].updatedAt = Date()
+        scheduleSave()
+    }
+
+    /// Development: decorates the selected note so screenshots show every style (bold first line, then italic · underline · strikethrough lines).
+    func debugApplySampleFormatting() {
+        guard let note = selected, !note.text.isEmpty else { return }
+        let mutable = NSMutableAttributedString(string: note.text, attributes: [.font: NSFont.systemFont(ofSize: 13)])
+        let lines = note.text.components(separatedBy: "\n")
+        var location = 0
+        let manager = NSFontManager.shared
+        for (index, line) in lines.enumerated() {
+            let range = NSRange(location: location, length: (line as NSString).length)
+            switch index {
+            case 0: mutable.addAttribute(.font, value: manager.convert(NSFont.systemFont(ofSize: 13), toHaveTrait: .boldFontMask), range: range)
+            case 1: mutable.addAttribute(.font, value: manager.convert(NSFont.systemFont(ofSize: 13), toHaveTrait: .italicFontMask), range: range)
+            case 2: mutable.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            case 3: mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            default: break
+            }
+            location += range.length + 1
+        }
+        update(attributed: mutable)
+    }
+
+    private static func hasFormatting(_ attributed: NSAttributedString) -> Bool {
+        var found = false
+        attributed.enumerateAttributes(in: NSRange(location: 0, length: attributed.length)) { attrs, _, stop in
+            if (attrs[.underlineStyle] as? Int ?? 0) != 0 || (attrs[.strikethroughStyle] as? Int ?? 0) != 0 { found = true; stop.pointee = true; return }
+            if let font = attrs[.font] as? NSFont {
+                let traits = NSFontManager.shared.traits(of: font)
+                if traits.contains(.boldFontMask) || traits.contains(.italicFontMask) { found = true; stop.pointee = true }
+            }
+        }
+        return found
     }
 
     func delete(_ id: UUID) {

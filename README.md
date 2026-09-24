@@ -10,7 +10,7 @@
   <tr>
     <td align="center"><img src="docs/screenshots/clipboard.png" width="230"><br><b>클립보드</b><br><sub>앱별 · 시:분:초 · 검색</sub></td>
     <td align="center"><img src="docs/screenshots/checklist.png" width="230"><br><b>체크리스트</b><br><sub>마감 배지 · 보관함</sub></td>
-    <td align="center"><img src="docs/screenshots/notes.png" width="230"><br><b>메모 · 미니 메모</b><br><sub>자동 저장 스크래치</sub></td>
+    <td align="center"><img src="docs/screenshots/notes.png" width="230"><br><b>메모 · 미니 메모</b><br><sub>자동 저장 · ⌘B ⌘I ⌘U ⌘⇧X 서식</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/system.png" width="230"><br><b>시스템</b><br><sub>온도 · CPU/GPU · 배터리</sub></td>
@@ -111,7 +111,9 @@
     (채팅 프라이버시 ⌘⌥⇧B는 그 탭에서 같은 방식으로)
 - **메모** 탭 (상단 세그먼트로 두 섹션)
   - **미니 메모**: 잠깐 적어두는 스크래치 메모장. 여러 개를 칩으로 오가며 쓰고, 입력 즉시 자동 저장(`notes.json`),
-    전체 복사 · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다
+    전체 복사(서식 포함 RTF + 텍스트) · 삭제(확인 한 번). 첫 줄이 메모 제목이 됩니다.
+    구글 독스처럼 **⌘B 굵게 · ⌘I 기울임 · ⌘U 밑줄 · ⌘⇧X 취소선 · ⌘⇧\ 서식 지우기**(편집기 위 버튼으로도) — 서식은 NSAttributedString
+    아카이브로 함께 저장되고 글자색은 저장하지 않아 다크 모드에서도 그대로
   - **스토리보드**: 영상 기획용. 스토리보드를 여러 개 두고(이름 바꾸기·삭제), 각 스토리보드에 **Scene 1, 2, 3…** 을 추가/복제/순서 바꾸기/삭제.
     장면마다 **화면 비율**(16:9 · 9:16 · 1:1 · 4:3 · 3:4 · 21:9 · 4:5, "모든 장면에 적용")과 **배경색**을 정하고, 캔버스에
     **도형**(사각형·둥근 사각형·원·삼각형·화살표·별, 채우기/선) · **텍스트**(클릭한 곳에 추가, 글자 크기·색) · **펜 스케치**(색·굵기, 마지막 선 되돌리기) ·

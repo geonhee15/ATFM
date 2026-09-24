@@ -5,7 +5,9 @@ struct QuickNotesView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var confirmingDelete = false
     @State private var copied = false
-    @FocusState private var editorFocused: Bool
+    @State private var format = TextFormatState()
+    @State private var focusRequest = 0
+    @State private var handle = RichTextEditorHandle()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -46,7 +48,7 @@ struct QuickNotesView: View {
             }
             Button {
                 store.addNote()
-                editorFocused = true
+                focusRequest += 1
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
@@ -59,24 +61,55 @@ struct QuickNotesView: View {
     }
 
     private var editor: some View {
-        ZStack(alignment: .topLeading) {
-            TextEditor(text: Binding(get: { store.selectedText }, set: { store.selectedText = $0 }))
-                .font(.system(size: 13))
-                .scrollContentBackground(.hidden)
-                .focused($editorFocused)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
-            if store.selectedText.isEmpty {
-                Text("잠깐 적어둘 것…")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 8)
-                    .allowsHitTesting(false)
+        VStack(spacing: 0) {
+            formatBar
+            Divider().padding(.horizontal, 10)
+            ZStack(alignment: .topLeading) {
+                RichTextEditor(noteID: store.selectedID, content: store.selected?.attributed ?? NSAttributedString(),
+                               onChange: { store.update(attributed: $0) },
+                               onFormatChange: { state in if state != format { format = state } },
+                               focusRequest: focusRequest, handle: handle)
+                if store.selectedText.isEmpty {
+                    Text("잠깐 적어둘 것…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .card()
+    }
+
+    /// Google-Docs style formatting: ⌘B · ⌘I · ⌘U · ⌘⇧X, mirrored as buttons.
+    private var formatBar: some View {
+        HStack(spacing: 4) {
+            formatButton("bold", on: format.bold, help: "굵게 ⌘B") { handle.bold() }
+            formatButton("italic", on: format.italic, help: "기울임 ⌘I") { handle.italic() }
+            formatButton("underline", on: format.underline, help: "밑줄 ⌘U") { handle.underline() }
+            formatButton("strikethrough", on: format.strikethrough, help: "취소선 ⌘⇧X") { handle.strikethrough() }
+            Spacer()
+            Button { handle.clear() } label: {
+                Image(systemName: "textformat.abc.dottedunderline").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain).help("서식 지우기 ⌘⇧\\")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+    }
+
+    private func formatButton(_ symbol: String, on: Bool, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 24, height: 20)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(on ? Theme.accent.opacity(0.18) : Color.clear))
+                .foregroundStyle(on ? Theme.accent : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private var footer: some View {
@@ -132,6 +165,10 @@ struct QuickNotesView: View {
         guard !text.isEmpty else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
+        if let attributed = store.selected?.attributed, store.selected?.rich != nil,
+           let rtf = try? attributed.data(from: NSRange(location: 0, length: attributed.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
+            pasteboard.setData(rtf, forType: .rtf)
+        }
         pasteboard.setString(text, forType: .string)
         copied = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }

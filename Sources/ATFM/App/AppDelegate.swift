@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let notesDirectory = ProcessInfo.processInfo.environment["ATFM_DEBUG_NOTES_DIR"].map { URL(fileURLWithPath: $0) } ?? store.directory
         let notes = QuickNotesStore(directory: notesDirectory)
         self.notes = notes
+        if ProcessInfo.processInfo.environment["ATFM_DEBUG_NOTES_RICH"] == "1" { notes.debugApplySampleFormatting() }
         let storyboards = StoryboardStore(directory: store.directory)
         self.storyboards = storyboards
         if ProcessInfo.processInfo.environment["ATFM_DEBUG_STORYBOARD_SAMPLE"] == "1" {
