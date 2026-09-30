@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let autoScroller = AutoScroller()
     private let chatPrivacy = ChatPrivacyMode()
     private let cctv = CCTVMonitor()
+    private let bridge = BrowserBridge()
     private var privacySampleWindow: NSWindow?
     private let dictionary = DictionaryHub()
     private let calculator = CalculatorModel()
@@ -116,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, storyboards: storyboards, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv, bridge: bridge,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -155,6 +156,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         chatPrivacy.start()
         screenTools.hotkeys.focusForRecording = { [weak bubble] in bubble?.panel.makeKey() }
         screenTools.hotkeys.registerAll()
+        bridge.start()
+        autoScroller.bridge = bridge
+        chatPrivacy.bridge = bridge
+        AppleScriptRunner.bridge = bridge
         autoScroller.start()
         if let record = env["ATFM_DEBUG_HOTKEY_RECORD"], let action = ToolHotkeys.Action(rawValue: record) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -412,6 +417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         autoScroller.stop()
         chatPrivacy.stop()
         cctv.stop()
+        bridge.stop()
         notes?.flush()
         storyboards?.flush()
         soundPanel.stopAll()

@@ -38,7 +38,7 @@ enum ScrollPlatform: String, CaseIterable, Identifiable {
     }
 }
 
-/// Browsers that can run JavaScript in a tab through Apple Events (Firefox can't).
+/// Browsers we can drive: Chromium/Safari through Apple Events, Zen/Firefox through the ATFM Bridge extension.
 enum ShortsBrowser: String, CaseIterable, Identifiable {
     case chrome = "com.google.Chrome"
     case chromeCanary = "com.google.Chrome.canary"
@@ -47,6 +47,8 @@ enum ShortsBrowser: String, CaseIterable, Identifiable {
     case vivaldi = "com.vivaldi.Vivaldi"
     case arc = "company.thebrowser.Browser"
     case safari = "com.apple.Safari"
+    case zen = "app.zen-browser.zen"
+    case firefox = "org.mozilla.firefox"
 
     var id: String { rawValue }
 
@@ -59,14 +61,21 @@ enum ShortsBrowser: String, CaseIterable, Identifiable {
         case .vivaldi: return "Vivaldi"
         case .arc: return "Arc"
         case .safari: return "Safari"
+        case .zen: return "Zen"
+        case .firefox: return "Firefox"
         }
     }
 
     var isSafari: Bool { self == .safari }
+    /// Gecko browsers have no scripting dictionary; they talk to us through the bridge extension.
+    var usesBridge: Bool { self == .zen || self == .firefox }
+    var bridgeName: String { self == .zen ? "zen" : "firefox" }
+    static var appleScriptBrowsers: [ShortsBrowser] { allCases.filter { !$0.usesBridge } }
 
     /// How to switch on JavaScript-from-Apple-Events in this browser.
     var setupHint: String {
-        isSafari
+        if usesBridge { return "\(name)에는 'ATFM Bridge' 확장을 설치해야 해요 (아래 브라우저 연결 카드)." }
+        return isSafari
             ? "Safari 설정 › 고급 › '웹 개발자용 기능 보기'를 켠 뒤, 메뉴 막대 개발자 › 'Apple 이벤트의 JavaScript 허용'을 켜 주세요."
             : "\(name) 메뉴 막대 보기(View) › 개발자(Developer) › 'Apple 이벤트에서 JavaScript 허용'을 켜 주세요."
     }
@@ -197,8 +206,16 @@ final class AutoScroller {
         if isEnabled { poll(enabled: true, synchronous: false) }
     }
 
+    @ObservationIgnored var bridge: BrowserBridge?
+
     func refreshBrowsers() {
-        runningBrowsers = ShortsBrowser.allCases.filter(\.isRunning)
+        // A connected bridge client proves its browser is running, whatever the process list says.
+        runningBrowsers = ShortsBrowser.allCases.filter { $0.isRunning || ($0.usesBridge && bridge?.client(named: $0.bridgeName) != nil) }
+    }
+
+    /// Bridge browsers that are running but whose extension isn't connected (so we can say why nothing happens).
+    var bridgeBrowsersWaiting: [ShortsBrowser] {
+        runningBrowsers.filter { $0.usesBridge && bridge?.client(named: $0.bridgeName) == nil }
     }
 
     // MARK: Polling
@@ -218,7 +235,7 @@ final class AutoScroller {
         guard inFlight == 0 || synchronous else { return }
         if runningBrowsers.isEmpty {
             tabs = []
-            problem = enabled ? "지원하는 브라우저가 실행 중이 아니에요 (Chrome · Brave · Edge · Vivaldi · Arc · Safari)" : nil
+            problem = enabled ? "지원하는 브라우저가 실행 중이 아니에요 (Chrome · Brave · Edge · Vivaldi · Arc · Safari · Zen/Firefox+확장)" : nil
             setupHint = nil
             return
         }
@@ -230,7 +247,7 @@ final class AutoScroller {
         }
         for platform in active {
             let js = platform.agentCall(repeat: repeatCount, enabled: enabled, comments: autoOpenComments)
-            for browser in runningBrowsers {
+            for browser in runningBrowsers where !browser.usesBridge {
                 inFlight += 1
                 Self.runOSAScript(browser.script(js: js, urlNeedle: platform.urlNeedle), synchronous: synchronous) { [weak self] output, error in
                     MainActor.assumeIsolated {
@@ -239,6 +256,24 @@ final class AutoScroller {
                         guard enabled else { return }
                         self.handle(browser: browser, platform: platform, output: output, error: error)
                     }
+                }
+            }
+            for browser in runningBrowsers where browser.usesBridge {
+                guard let bridge, bridge.client(named: browser.bridgeName) != nil else {
+                    if enabled, runningBrowsers.allSatisfy(\.usesBridge) { setupHint = browser.setupHint }
+                    continue
+                }
+                inFlight += 1
+                bridge.exec(js, needle: platform.urlNeedle) { [weak self] results, error in
+                    guard let self else { return }
+                    self.inFlight = max(0, self.inFlight - 1)
+                    guard enabled else { return }
+                    // Same line format the AppleScript path produces: one JSON (or "ERR …") per tab.
+                    let output = results.filter { $0.url.contains(platform.urlNeedle) }.map { result -> String in
+                        if let error = result.error { return "ERR 0 \(error)" }
+                        return result.value ?? ""
+                    }.joined(separator: "\n")
+                    self.handle(browser: browser, platform: platform, output: output, error: error)
                 }
             }
         }

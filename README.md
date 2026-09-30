@@ -158,6 +158,11 @@
     이름(한글·옛 이름·영어)·기호·번호로 검색, 원소를 누르면
     원자량 · 주기/족/블록 · 실온 상태 · 전자 배치 · 전기음성도 · 밀도 · 녹는점/끓는점 · 발견 + **대표 화합물 3개**(H → H₂O 물 · CH₄ 메테인 · NH₃ 암모니아) + 위키백과 링크.
     데이터: [Bowserinator/Periodic-Table-JSON](https://github.com/Bowserinator/Periodic-Table-JSON) (CC BY-SA 3.0) + 대한화학회 표기 한글 이름
+- **Zen · Firefox 지원 (ATFM Bridge 확장)**: Gecko 브라우저는 Apple 이벤트로 탭을 읽거나 JS를 실행할 수 없어서, 앱에 들어 있는 작은
+  WebExtension(`Resources/BrowserBridge`, 빌드 시 `ATFM-Bridge.xpi`)이 ATFM의 루프백 WebSocket 서버(127.0.0.1:47831)에 붙어
+  탭 목록·활성 탭을 알려주고 요청한 스크립트를 탭에서 실행해요. 이걸로 자동 스크롤(쇼츠·릴스) · 채팅 프라이버시(Zen 탭 주소·페이지 구조) ·
+  플레이리스트 분석(YouTube 탭 찾기)이 Zen/Firefox에서도 똑같이 동작. 자동 스크롤 탭의 "Zen · Firefox 연결" 카드에서 설치 안내:
+  about:config `xpinstall.signatures.required=false` 후 .xpi 끌어다 놓기(영구), 또는 about:debugging 임시 로드
 - **자동 스크롤** 탭 (YouTube 쇼츠 · Instagram 릴스)
   - 브라우저의 쇼츠/릴스 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작. 플랫폼별 켜기/끄기
   - **Instagram 릴스**: 마크업이 난독화돼 있어 구조로 찾음 — 화면 중앙에 가장 가까운 재생 중 `<video>`, 그 스크롤 컨테이너, aria-label(Next/다음) 버튼.
@@ -278,6 +283,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
+| `ATFM_PROBE_BRIDGE=<초> ATFM --probe` | 브리지 서버를 그 시간 동안 열고 연결된 확장의 브라우저·탭 수·활성 탭, 테스트 스크립트 실행 결과를 출력합니다 |
 | `ATFM_DEBUG_CCTV_SAMPLE=1` · `ATFM_DEBUG_CCTV_STREAM=<url>` (+`ATFM_DEBUG_CCTV_LOG=1`) | 퀵 CCTV를 생성한 샘플 영상(6초마다 지나가는 방문자) 또는 지정한 MJPEG 주소로 시작하고 움직임 감지를 켭니다 (설정은 저장하지 않음, LOG는 연결/재연결 기록); `ATFM_PROBE_CCTV=1 ATFM --probe`는 보이는 카메라와 권한 상태 출력, `ATFM_PROBE_STREAM=<url>`은 MJPEG 주소에 6초 연결해 찾은 경로·프레임 수 출력 |
 | `ATFM_DEBUG_MEMO=notes\|storyboard` · `ATFM_DEBUG_STORYBOARD_SAMPLE=1` (+`ATFM_DEBUG_STORYBOARD_MUSIC=/path.wav` · `_IMAGE=/path.png` · `_TRIM=4,34`) | 메모 탭의 섹션을 고르고, 도형·텍스트·스케치가 든 샘플 스토리보드(선택 시 배경음악까지)를 만들어 둡니다 (스냅샷용) |
 | `ATFM_PROBE_AUTOSCROLL=js\|script\|safari\|reels\|reels-script` | 쇼츠/릴스 에이전트 JS / 생성된 AppleScript를 출력합니다 (osacompile로 문법 검사) |
@@ -312,6 +318,7 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
+├── Bridge/      Zen·Firefox 브리지 (BrowserBridge: Network.framework WebSocket 서버, 탭/활성 탭, exec)
 ├── CCTV/        퀵 CCTV (CCTVMonitor: AVCaptureSession 카메라/연속성 카메라 · MJPEGClient · MotionDetector 격자 차분 · 녹화 · 플로팅 창)
 ├── Storyboard/  스토리보드 (모델·StoryboardStore: 장면/도형/스케치, AVAudioPlayer 재생 + 파형, 장면 구간 cuts, 큰 창)
 ├── Calculator/  계산기 (CalcEngine 파서·평가기, 기록)

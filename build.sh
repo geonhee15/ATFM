@@ -66,6 +66,10 @@ cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp build/ATFMMediaRemote.dylib "$APP/Contents/Resources/ATFMMediaRemote.dylib"
 cp Resources/mediaremote.pl "$APP/Contents/Resources/mediaremote.pl"
 cp Resources/elements.json "$APP/Contents/Resources/elements.json"
+# Zen/Firefox bridge extension: folder for "임시 추가 기능" loading + an .xpi for permanent install
+rm -rf "$APP/Contents/Resources/BrowserBridge"; cp -R Resources/BrowserBridge "$APP/Contents/Resources/BrowserBridge"
+( cd Resources/BrowserBridge && rm -f ../../build/ATFM-Bridge.xpi && /usr/bin/zip -q -X -r ../../build/ATFM-Bridge.xpi manifest.json background.js icon.png )
+cp build/ATFM-Bridge.xpi "$APP/Contents/Resources/ATFM-Bridge.xpi"
 
 # Finder likes to stamp com.apple.FinderInfo on the .app folder once it has been launched; codesign
 # refuses to seal a bundle carrying it, and an unsealed signature makes TCC ignore every permission grant.

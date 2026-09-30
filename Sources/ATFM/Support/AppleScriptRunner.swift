@@ -32,11 +32,19 @@ enum AppleScriptRunner {
 
     /// `URL<TAB>title` per line for every tab of every running browser we can talk to.
     /// `error` is the first AppleScript failure (typically the Automation permission being denied).
+    @MainActor static weak var bridge: BrowserBridge?
+
     @MainActor
     static func browserTabs(completion: @escaping @MainActor ([(url: String, title: String)], _ error: String?) -> Void) {
-        let browsers = ShortsBrowser.allCases.filter(\.isRunning)
-        guard !browsers.isEmpty else { completion([], "지원하는 브라우저가 실행 중이 아니에요"); return }
-        var collected: [(url: String, title: String)] = []
+        let browsers = ShortsBrowser.appleScriptBrowsers.filter(\.isRunning)
+        let bridged = bridge?.allTabs ?? []
+        guard !browsers.isEmpty else {
+            if !bridged.isEmpty { completion(bridged, nil) }
+            else if ShortsBrowser.allCases.contains(where: { $0.usesBridge && $0.isRunning }) { completion([], "Zen/Firefox는 'ATFM Bridge' 확장이 연결되어야 탭을 볼 수 있어요") }
+            else { completion([], "지원하는 브라우저가 실행 중이 아니에요") }
+            return
+        }
+        var collected: [(url: String, title: String)] = bridged
         var firstError: String?
         var pending = browsers.count
         for browser in browsers {

@@ -77,6 +77,7 @@ struct PrivacyTarget: Codable, Identifiable, Equatable {
         preset("gchat-firefox", "org.mozilla.firefox", "Google Chat (Firefox 탭)", top: 150, composer: 120, chatTab: true),
         preset("gchat-edge", "com.microsoft.edgemac", "Google Chat (Edge 탭)", top: 64, composer: 120, chatTab: true),
         preset("gchat-brave", "com.brave.Browser", "Google Chat (Brave 탭)", top: 64, composer: 120, chatTab: true),
+        preset("gchat-zen", "app.zen-browser.zen", "Google Chat (Zen 탭)", top: 64, composer: 120, chatTab: true),
         preset("slack", "com.tinyspeck.slackmacgap", "Slack", top: 56, composer: 120),
         preset("discord", "com.hnc.Discord", "Discord", top: 48, composer: 90),
         preset("telegram", "ru.keepcoder.Telegram", "Telegram", top: 52, composer: 70),
@@ -137,6 +138,7 @@ final class ChatPrivacyMode {
     @ObservationIgnored private var lastAnalysis = Date.distantPast
     @ObservationIgnored private var analysisInFlight = false
     @ObservationIgnored var debugAllowSelf = false
+    @ObservationIgnored var bridge: BrowserBridge?
     @ObservationIgnored var debugLog: ((String) -> Void)?
     var debugOverlayDescription: String { overlay.debugMaskDescription + " clear=\(Int(currentClear)) coverTop=\(Int(currentCoverTop)) feather=\(Int(featherSize))" }
 
@@ -390,9 +392,13 @@ final class ChatPrivacyMode {
 
     private func pollFrontTabURL(of target: PrivacyTarget) {
         guard !tabProbeInFlight, Date().timeIntervalSince(tabProbeStarted) > 0.7 else { return }
+        let bundle = target.bundleID
+        if let browser = ShortsBrowser(rawValue: bundle), browser.usesBridge {
+            pollBridgeTab(of: target, browser: browser)
+            return
+        }
         tabProbeInFlight = true
         tabProbeStarted = Date()
-        let bundle = target.bundleID
         let withJS = Date() > pageJSUnavailableUntil
         AppleScriptRunner.run(Self.frontTabScript(bundle: bundle, geometry: withJS), timeout: 3) { [weak self] output, error in
             guard let self else { return }
@@ -416,6 +422,27 @@ final class ChatPrivacyMode {
             self.tabURLTime = Date()
             if lines.count > 1 { self.pageGeometry = Self.parseGeometry(lines[1]) }
             if self.lastError?.contains("자동화") == true { self.lastError = nil }
+        }
+    }
+
+    /// Zen/Firefox: the extension already knows the active tab; page geometry comes from a script it runs there.
+    private func pollBridgeTab(of target: PrivacyTarget, browser: ShortsBrowser) {
+        tabProbeStarted = Date()
+        guard let bridge, let client = bridge.client(named: browser.bridgeName) else {
+            if lastError == nil { lastError = "\(browser.name)에는 'ATFM Bridge' 확장이 연결되어야 탭 주소를 읽어요 (자동 스크롤 탭의 브라우저 연결 카드)" }
+            tabURL = ""
+            return
+        }
+        if lastError?.contains("Bridge") == true { lastError = nil }
+        tabURL = client.activeTab?.url ?? ""
+        tabURLBundle = target.bundleID
+        tabURLTime = Date()
+        guard !tabURL.isEmpty, PrivacyTarget.urlMatches(tabURL, keywords: target.urlKeywords ?? []) else { return }
+        tabProbeInFlight = true
+        bridge.execInActiveTab(of: browser.bridgeName, code: Self.pageGeometryJS) { [weak self] value, _ in
+            guard let self else { return }
+            self.tabProbeInFlight = false
+            if let value { self.pageGeometry = Self.parseGeometry(value) }
         }
     }
 

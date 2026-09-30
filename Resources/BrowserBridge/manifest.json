@@ -1,0 +1,11 @@
+{
+  "manifest_version": 2,
+  "name": "ATFM Bridge",
+  "version": "1.0",
+  "description": "ATFM(Additional Things For Mac) 메뉴 막대 앱과 이 브라우저를 잇는 다리 — 자동 스크롤(쇼츠·릴스), 채팅 프라이버시, 플레이리스트 분석이 Zen/Firefox에서도 동작하게 해요. 이 Mac 안(127.0.0.1)에서만 통신합니다.",
+  "homepage_url": "https://github.com/geonhee15/ATFM",
+  "icons": { "48": "icon.png", "96": "icon.png" },
+  "permissions": ["tabs", "<all_urls>"],
+  "background": { "scripts": ["background.js"], "persistent": true },
+  "browser_specific_settings": { "gecko": { "id": "atfm-bridge@geonhee15", "strict_min_version": "115.0" } }
+}

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AutoScrollView: View {
     @Bindable var scroller: AutoScroller
+    var bridge: BrowserBridge
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -15,6 +16,7 @@ struct AutoScrollView: View {
                 if let hint = scroller.setupHint { noticeCard(icon: "wrench.and.screwdriver", color: .orange, title: "브라우저 설정이 한 번 필요해요", text: hint) }
                 if let problem = scroller.problem { noticeCard(icon: "exclamationmark.triangle", color: .red, title: "지금은 동작하지 않아요", text: problem) }
                 statusCard
+                BrowserBridgeCard(bridge: bridge)
                 tipCard
             }
             .padding(.bottom, 6)
@@ -219,7 +221,7 @@ struct AutoScrollView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("손으로 넘겨도 괜찮아요")
                     .font(.system(size: 13, weight: .semibold))
-                Text("다시 보고 싶으면 위로 올리면 돼요. 그 편이 다시 끝나면 또 넘겨요. 처음 켤 때 macOS가 브라우저 제어 권한을 물어보면 허용해 주세요. Firefox는 지원하지 않아요.")
+                Text("다시 보고 싶으면 위로 올리면 돼요. 그 편이 다시 끝나면 또 넘겨요. 처음 켤 때 macOS가 브라우저 제어 권한을 물어보면 허용해 주세요. Zen·Firefox는 위 카드의 ATFM Bridge 확장을 설치하면 돼요.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -104,6 +104,7 @@ struct RootView: View {
     var autoScroller: AutoScroller
     var chatPrivacy: ChatPrivacyMode
     var cctv: CCTVMonitor
+    var bridge: BrowserBridge
     var nowPlaying: NowPlayingMonitor
     var miniPlayer: MiniPlayerController
     var sound: SoundPanel
@@ -153,7 +154,7 @@ struct RootView: View {
                 case .tools:
                     ScreenToolsView(tools: screenTools)
                 case .autoscroll:
-                    AutoScrollView(scroller: autoScroller)
+                    AutoScrollView(scroller: autoScroller, bridge: bridge)
                 case .privacy:
                     ChatPrivacyView(privacy: chatPrivacy, hotkeys: screenTools.hotkeys)
                 case .cctv:

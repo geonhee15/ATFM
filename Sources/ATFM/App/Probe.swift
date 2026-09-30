@@ -393,6 +393,31 @@ enum Probe {
             print("frames in 6 s: \(frames)")
             return
         }
+        if let seconds = ProcessInfo.processInfo.environment["ATFM_PROBE_BRIDGE"].flatMap(Double.init) {   // run the bridge server, report clients/tabs, exec a test
+            let bridge = BrowserBridge()
+            bridge.start()
+            print("bridge starting on 127.0.0.1:\(BrowserBridge.port) for \(Int(seconds)) s")
+            let deadline = Date().addingTimeInterval(seconds)
+            var reported = false
+            var stateReported = false
+            while Date() < deadline {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+                if !stateReported, bridge.isListening || bridge.lastError != nil {
+                    stateReported = true
+                    print(bridge.isListening ? "listening" : "listener error: \(bridge.lastError ?? "?")")
+                }
+                if !reported, let client = bridge.clients.first, !client.tabs.isEmpty {
+                    reported = true
+                    print("client: \(client.browser) \(client.version) tabs=\(client.tabs.count) active=\(client.activeTab.map { URL(string: $0.url)?.host ?? $0.url } ?? "-")")
+                    bridge.exec("JSON.stringify({title: document.title.length, w: innerWidth})", needle: "") { results, error in
+                        print("exec: \(results.count) results, error=\(error ?? "none") first=\(results.first.map { $0.value ?? $0.error ?? "" } ?? "")")
+                    }
+                }
+            }
+            print("clients at end: \(bridge.clients.map(\.browser))")
+            bridge.stop()
+            return
+        }
         if ProcessInfo.processInfo.environment["ATFM_PROBE_CCTV"] == "1" {
             let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.continuityCamera, .builtInWideAngleCamera, .external], mediaType: .video, position: .unspecified)
             print("camera permission: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue) (3 = authorized)")
