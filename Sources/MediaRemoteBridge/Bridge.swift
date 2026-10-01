@@ -84,8 +84,10 @@ final class MediaRemoteBridge {
             payload["title"] = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
             payload["artist"] = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
             payload["album"] = info["kMRMediaRemoteNowPlayingInfoAlbum"] as? String ?? ""
-            payload["duration"] = (info["kMRMediaRemoteNowPlayingInfoDuration"] as? NSNumber)?.doubleValue ?? 0
-            payload["elapsed"] = (info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? NSNumber)?.doubleValue ?? 0
+            let duration = (info["kMRMediaRemoteNowPlayingInfoDuration"] as? NSNumber)?.doubleValue ?? 0
+            let elapsed = (info["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? NSNumber)?.doubleValue ?? 0
+            payload["duration"] = duration.isFinite ? duration : 0
+            payload["elapsed"] = elapsed.isFinite ? elapsed : 0
             payload["rate"] = (info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?.doubleValue ?? (playing ? 1 : 0)
             if let date = info["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date {
                 payload["timestamp"] = date.timeIntervalSince1970
@@ -108,8 +110,29 @@ final class MediaRemoteBridge {
         emitLine(payload)
     }
 
-    private func emitLine(_ object: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: object), let text = String(data: data, encoding: .utf8) else { return }
+    /// NaN/∞ (seen when the player app quits mid-update) make NSJSONSerialization throw an ObjC exception
+    /// that Swift can't catch — the whole bridge aborted with status 6. Scrub numbers first.
+    private static func sanitized(_ object: [String: Any]) -> [String: Any] {
+        var clean: [String: Any] = [:]
+        for (key, value) in object {
+            if let number = value as? Double {
+                clean[key] = number.isFinite ? number : 0
+            } else if let number = value as? NSNumber, !(value is Bool) {
+                let d = number.doubleValue
+                clean[key] = d.isFinite ? value : 0
+            } else if let nested = value as? [String: Any] {
+                clean[key] = sanitized(nested)
+            } else {
+                clean[key] = value
+            }
+        }
+        return clean
+    }
+
+    private func emitLine(_ raw: [String: Any]) {
+        let object = Self.sanitized(raw)
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object), let text = String(data: data, encoding: .utf8) else { return }
         // Skip exact duplicates except when they carry artwork (the app needs it once).
         if text == lastPayload, object["artwork"] == nil { return }
         lastPayload = text

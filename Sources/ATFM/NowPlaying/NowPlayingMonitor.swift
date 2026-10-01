@@ -147,14 +147,14 @@ final class NowPlayingMonitor {
         track = nil
         artwork = nil
         guard !stopping else { return }
-        // Restart with a little backoff; give up after repeated immediate failures.
+        // Always come back: the bridge can die when the player app quits mid-update (browser closed…).
+        // Backoff 2 · 4 · 8 · 15 · 30 s, reset after a healthy half minute, never give up.
         if let startedAt, Date().timeIntervalSince(startedAt) > 30 { restartAttempts = 0 }
         restartAttempts += 1
-        guard restartAttempts <= 5 else {
-            lastError = "브리지가 계속 종료돼요 (status \(status))"
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(restartAttempts) * 2) { [weak self] in
+        let delays: [Double] = [2, 4, 8, 15, 30]
+        let delay = delays[min(restartAttempts - 1, delays.count - 1)]
+        lastError = restartAttempts >= 3 ? "브리지가 종료돼서 \(Int(delay))초 뒤 다시 시작해요 (\(restartAttempts)회, status \(status))" : nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, !self.stopping, self.process == nil else { return }
                 self.launchBridge()
