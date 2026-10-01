@@ -407,7 +407,12 @@ struct LyricsBox: View {
         case .notFound:
             centered {
                 Image(systemName: "text.badge.xmark").font(.system(size: 18)).foregroundStyle(.tertiary)
-                Text("이 곡의 가사를 찾지 못했어요").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(lyrics.candidates.isEmpty ? "이 곡의 가사를 찾지 못했어요" : "같은 제목의 다른 노래만 찾았어요")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                if !lyrics.candidates.isEmpty {
+                    Text("가수·길이가 달라서 자동으로 고르지 않았어요 · 목록에서 직접 고를 수 있어요")
+                        .font(.system(size: 10.5)).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+                }
             }
         case .failed(let message):
             centered {

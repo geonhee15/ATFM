@@ -165,18 +165,86 @@ enum LyricsService {
         return unique
     }
 
+    /// Ranking. The artist and the duration decide between same-title songs; synced/Hangul only break ties
+    /// among real matches (before, a synced upload of a *different* artist's song outranked the right one).
     static func score(_ candidate: LyricsCandidate, title: String, artist: String, duration: Double) -> Double {
         var score = 0.0
-        if candidate.isSynced { score += 100 }
+        switch artistMatch(candidate.artistName, artist) {
+        case .same: score += 80
+        case .overlap: score += 50
+        case .unknown: score += 0
+        case .different: score -= 90
+        }
+        switch titleMatch(candidate.trackName, title) {
+        case .same: score += 30
+        case .overlap: score += 10
+        case .unknown: break
+        case .different: score -= 50
+        }
         if duration > 0, candidate.duration > 0 {
             let delta = abs(candidate.duration - duration)
-            score += delta <= 2 ? 40 : (delta <= 5 ? 20 : (delta <= 15 ? 5 : -40))
+            score += delta <= 2 ? 40 : (delta <= 5 ? 20 : (delta <= 15 ? -10 : -60))
         }
-        if candidate.containsHangul { score += 30 }   // prefer 한글 over romanized uploads
-        if candidate.trackName.compare(title, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame { score += 15 }
-        if candidate.artistName.compare(artist, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame { score += 10 }
-        if candidate.plainRaw != nil { score += 5 }
+        if candidate.isSynced { score += 25 }
+        if candidate.containsHangul, containsHangul(title) || containsHangul(artist) { score += 15 }   // prefer 한글 over romanized uploads
+        if candidate.plainRaw != nil { score += 3 }
         return score
+    }
+
+    /// Below this the best hit is probably another song with the same title; the user can still pick manually.
+    static func isConfident(_ candidate: LyricsCandidate, title: String, artist: String, duration: Double) -> Bool {
+        let artist = artistMatch(candidate.artistName, artist)
+        let titleOK = titleMatch(candidate.trackName, title) != .different
+        let durationOK = duration <= 0 || candidate.duration <= 0 || abs(candidate.duration - duration) <= 15
+        switch artist {
+        case .same, .overlap: return titleOK
+        case .unknown: return titleOK && durationOK
+        case .different: return false
+        }
+    }
+
+    enum Match { case same, overlap, unknown, different }
+
+    /// Lowercased, diacritics stripped, punctuation/spaces removed, "feat." parts dropped.
+    static func normalized(_ text: String) -> String {
+        var t = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()
+        t = t.replacingOccurrences(of: #"\s*[\(\[][^\)\]]*(feat|ft\.|with)[^\)\]]*[\)\]]"#, with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\s+(feat\.?|ft\.?)\s+.*$"#, with: "", options: .regularExpression)
+        return t.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
+    }
+
+    /// Artist names split into people: "IU, BTS" / "A & B" / "A x B" / "A feat. B".
+    static func artistTokens(_ text: String) -> Set<String> {
+        let separators = [",", "&", " x ", " X ", "/", ";", " feat. ", " feat ", " ft. ", " ft ", " with ", "、", "·"]
+        var parts = [text]
+        for separator in separators { parts = parts.flatMap { $0.components(separatedBy: separator) } }
+        return Set(parts.map(normalized).filter { $0.count >= 2 })
+    }
+
+    static func artistMatch(_ candidate: String, _ wanted: String) -> Match {
+        let a = artistTokens(candidate), b = artistTokens(wanted)
+        if a.isEmpty || b.isEmpty { return .unknown }
+        // "IU" vs "아이유": a romanized name and a Hangul name can't be compared by spelling — stay neutral
+        // (title + duration then decide) instead of calling it a different artist.
+        let candidateHangul = containsHangul(candidate), wantedHangul = containsHangul(wanted)
+        let candidateLatin = candidate.unicodeScalars.contains { CharacterSet.letters.contains($0) && $0.isASCII }
+        let wantedLatin = wanted.unicodeScalars.contains { CharacterSet.letters.contains($0) && $0.isASCII }
+        if (candidateHangul && !candidateLatin && wantedLatin && !wantedHangul) || (wantedHangul && !wantedLatin && candidateLatin && !candidateHangul) {
+            return .unknown
+        }
+        if a == b || normalized(candidate) == normalized(wanted) { return .same }
+        if !a.isDisjoint(with: b) { return .overlap }
+        // One name containing the other ("IU" vs "IU (아이유)", "BTS" vs "방탄소년단 BTS")
+        for x in a { for y in b where x.count >= 3 && y.count >= 3 && (x.contains(y) || y.contains(x)) { return .overlap } }
+        return .different
+    }
+
+    static func titleMatch(_ candidate: String, _ wanted: String) -> Match {
+        let a = normalized(cleanTitle(candidate)), b = normalized(cleanTitle(wanted))
+        if a.isEmpty || b.isEmpty { return .unknown }
+        if a == b { return .same }
+        if a.contains(b) || b.contains(a) { return .overlap }
+        return .different
     }
 
     static func containsHangul(_ text: String) -> Bool {
@@ -380,11 +448,12 @@ final class LyricsController {
                 let found = try await LyricsService.candidates(title: track.title, artist: track.artist, album: track.album, duration: track.duration)
                 guard !Task.isCancelled, let self, self.trackKey == currentKey else { return }
                 self.candidates = found
-                if let best = found.first {
+                if let best = found.first, LyricsService.isConfident(best, title: track.title, artist: track.artist, duration: track.duration) {
                     LyricsService.cache(best.asObject, key: cacheKey)
                     self.selectedCandidateID = best.id
                     self.state = .found(best.lyrics())
                 } else {
+                    // Same-title hits from other artists only: don't show the wrong song, leave them in the picker.
                     self.state = .notFound
                 }
                 self.memory[currentKey] = self.state
