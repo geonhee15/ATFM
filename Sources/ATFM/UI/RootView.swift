@@ -18,6 +18,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case privacy
     case cctv
     case convert
+    case audio
     case player
     case sound
     case ai
@@ -44,6 +45,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .privacy: return "eye.slash"
         case .cctv: return "web.camera"
         case .convert: return "arrow.triangle.2.circlepath"
+        case .audio: return "waveform"
         case .player: return "music.note"
         case .sound: return "speaker.wave.2"
         case .ai: return "bubble.left.and.text.bubble.right"
@@ -70,6 +72,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .privacy: return "채팅 프라이버시"
         case .cctv: return "퀵 CCTV"
         case .convert: return "파일 변환"
+        case .audio: return "오디오 편집기"
         case .player: return "미니 플레이어"
         case .sound: return "사운드"
         case .ai: return "간편 AI"
@@ -100,6 +103,7 @@ struct RootView: View {
     var gemini: GeminiChat
     var converter: FileConverter
     var downloader: MediaDownloader
+    var audioEditor: AudioEditor
     var screenTools: ScreenTools
     var autoScroller: AutoScroller
     var chatPrivacy: ChatPrivacyMode
@@ -161,6 +165,8 @@ struct RootView: View {
                     CCTVView(monitor: cctv)
                 case .convert:
                     ConvertView(converter: converter, downloader: downloader)
+                case .audio:
+                    AudioEditorView(editor: audioEditor)
                 case .player:
                     NowPlayingTabView(monitor: nowPlaying, controller: miniPlayer)
                 case .sound:

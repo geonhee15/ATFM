@@ -393,6 +393,35 @@ enum Probe {
             print("frames in 6 s: \(frames)")
             return
         }
+        if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_AUDIOEDIT"] {
+            // "in|out|start|end|speed|flags" — flags: nopitch, reverse, norm, fade, gain. Prints the ffmpeg filter and the result length.
+            let parts = spec.components(separatedBy: "|")
+            guard parts.count >= 5, let ffmpeg = FFmpegConverter.locate(), let full = ffmpeg.duration(of: URL(fileURLWithPath: parts[0])) else {
+                print("usage: in|out|start|end|speed|flags (needs ffmpeg + ffprobe)"); return
+            }
+            let flags = parts.count > 5 ? parts[5] : ""
+            var settings = AudioEditSettings(start: Double(parts[2]) ?? 0, end: Double(parts[3]) ?? full, speed: Double(parts[4]) ?? 1)
+            settings.keepPitch = !flags.contains("nopitch")
+            settings.reverse = flags.contains("reverse")
+            settings.normalize = flags.contains("norm")
+            if flags.contains("fade") { settings.fadeIn = 1; settings.fadeOut = 2 }
+            if flags.contains("gain") { settings.gainDB = -6 }
+            let output = URL(fileURLWithPath: parts[1])
+            let format = AudioExportFormat(rawValue: output.pathExtension.lowercased()) ?? .wav
+            let arguments = settings.arguments(input: URL(fileURLWithPath: parts[0]), output: output, format: format, bitrate: 192, sampleRate: 44100, fullDuration: full)
+            print("source \(String(format: "%.2f", full)) s · filter: \(settings.filterChain(sampleRate: 44100).joined(separator: ",")) · expected \(String(format: "%.2f", settings.outputDuration)) s")
+            let semaphore = DispatchSemaphore(value: 0)
+            Task.detached {
+                do {
+                    try await ffmpeg.run(arguments: arguments, duration: settings.outputDuration, job: FFmpegConverter.Job()) { _ in }
+                    let size = ((try? FileManager.default.attributesOfItem(atPath: output.path)[.size]) as? NSNumber)?.intValue ?? 0
+                    print("ok \(output.lastPathComponent): \(String(format: "%.2f", ffmpeg.duration(of: output) ?? -1)) s, \(size) bytes")
+                } catch { print("failed: \(error.localizedDescription)") }
+                semaphore.signal()
+            }
+            _ = semaphore.wait(timeout: .now() + 120)
+            return
+        }
         if let seconds = ProcessInfo.processInfo.environment["ATFM_PROBE_BRIDGE"].flatMap(Double.init) {   // run the bridge server, report clients/tabs, exec a test
             let bridge = BrowserBridge()
             bridge.start()

@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var gemini: GeminiChat?
     private let converter = FileConverter()
     private let downloader = MediaDownloader()
+    private let audioEditor = AudioEditor()
     private let screenTools = ScreenTools()
     private let autoScroller = AutoScroller()
     private let chatPrivacy = ChatPrivacyMode()
@@ -73,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.quickActions = quickActions
         appState.soundPanel = soundPanel
         appState.cctv = cctv
+        appState.audioEditor = audioEditor
         let cleaner = AppCleaner(resolver: identityResolver, network: networkMonitor)
         cleaner.restoreMonitors = { [weak self] in self?.appState.updateMonitors() }
         cleaner.playingBundleID = { [weak self] in
@@ -117,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, storyboards: storyboards, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv, bridge: bridge,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, audioEditor: audioEditor, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv, bridge: bridge,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
@@ -147,6 +149,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .pickColor: { [weak self] in self?.screenTools.pickColor() },
             .chatPrivacy: { [weak self] in self?.chatPrivacy.toggle() },
         ]
+        audioEditor.notify = { [weak self] title, message in
+            self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "waveform"), duration: 2.5)
+        }
+        if let path = env["ATFM_DEBUG_AUDIO_FILE"] {      // load a file (and optional "start,end,speed") for snapshots
+            audioEditor.load(URL(fileURLWithPath: path))
+            if let spec = env["ATFM_DEBUG_AUDIO_EDIT"] {
+                let parts = spec.split(separator: ",").compactMap { Double($0) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    MainActor.assumeIsolated {
+                        if parts.count > 1 { self.audioEditor.setTrimStart(parts[0]); self.audioEditor.setTrimEnd(parts[1]) }
+                        if parts.count > 2 { self.audioEditor.settings.speed = parts[2] }
+                        if parts.count > 3 { self.audioEditor.settings.fadeOut = parts[3] }
+                        self.audioEditor.seek(to: parts.first ?? 0)
+                        if env["ATFM_DEBUG_AUDIO_PLAY"] == "muted" {
+                            self.audioEditor.debugPlayMuted(seconds: 2) { NSLog("ATFM audio: %@", $0) }
+                        }
+                    }
+                }
+            }
+        }
         cctv.notify = { [weak self] title, message in
             self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "web.camera"), duration: 2.5)
         }
@@ -418,6 +440,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         chatPrivacy.stop()
         cctv.stop()
         bridge.stop()
+        audioEditor.shutdown()
         notes?.flush()
         storyboards?.flush()
         soundPanel.stopAll()

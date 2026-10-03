@@ -2,7 +2,7 @@
 
 맥을 쓰면서 "이거 하나 더 있었으면…" 싶었던 기능들을 메뉴 막대 앱 하나에 모아가는 프로젝트입니다.
 클립보드 기록으로 시작해서 체크리스트 · 메모(미니 메모·스토리보드) · 시스템/네트워크 모니터 · 빠른 동작 · 빠른 툴(화면 OCR·스포이드) ·
-쇼츠 자동 스크롤 · 파일 변환/다운로드 · 미니 플레이어 · 간편 AI까지, 탭 하나씩 늘려가고 있습니다.
+쇼츠 자동 스크롤 · 파일 변환/다운로드 · 오디오 편집기 · 미니 플레이어 · 간편 AI까지, 탭 하나씩 늘려가고 있습니다.
 
 ## 스크린샷
 
@@ -44,6 +44,9 @@
   <tr>
     <td align="center" colspan="2"><img src="docs/screenshots/storyboard.png" width="300"><br><b>메모 · 스토리보드</b><br><sub>장면별 캔버스(도형·텍스트·스케치·이미지·비율) · 배경음악 타임라인에 장면 구간</sub></td>
     <td align="center"><img src="docs/screenshots/cctv.png" width="230"><br><b>퀵 CCTV</b><br><sub>iPhone·Android 폰 카메라 · 움직임 감지 (샘플 영상)</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/audio.png" width="230"><br><b>오디오 편집기</b><br><sub>파형에서 자르기 · 배속 · 볼륨/페이드 · 형식 변환</sub></td>
   </tr>
 </table>
 
@@ -194,6 +197,16 @@
     페더 처리 — "가장자리 부드러움" 슬라이더(8~120pt, 기본 48)로 경계를 거의 없앨 수도 있고(그 위 메시지가 살짝 비침), 위쪽 가장자리도 살짝 페더.
     클릭·스크롤은 유리판을 통과하고, 톤(자동/밝게/어둡게) 선택
   - 전역 단축키 **⌘⌥⇧B**로 켜고 끄기(패널에서 바꾸기·기본값 복원, 상단 팝업으로 상태 표시). 창 제목 조건은 화면 기록 권한이 있어야 읽힘
+- **오디오 편집기** 탭
+  - 오디오 파일을 끌어다 놓거나 눌러서 열기(MP3 · M4A · WAV · FLAC · AIFF · OGG…, AVAudioFile이 못 여는 WebM 등은 ffmpeg로 임시 WAV를 만들어 열고,
+    동영상을 넣으면 소리만 가져옴). 길이 · 샘플레이트 · 채널 · 크기 표시
+  - **자르기**: 파형 위 양쪽 핸들을 끌거나, 재생 위치에서 "여기부터 / 여기까지", 또는 시작·끝 시간을 직접 입력(`1:23.4`). 파형을 누르면 그 위치로 이동,
+    스페이스로 재생/정지, 선택 구간 반복
+  - **배속** 0.25~3배(프리셋 0.5 · 0.75 · 1 · 1.25 · 1.5 · 2) + **음정 유지** 켜기/끄기(끄면 테이프처럼 음이 같이 변함),
+    **볼륨**(±20 dB) · **페이드 인/아웃** · **음량 자동 맞춤**(−16 LUFS) · **거꾸로**
+  - 재생 버튼은 AVAudioEngine으로 자르기·배속·음정·볼륨을 바로 들려주고, "결과 미리 듣기"는 내보낼 결과 그대로(페이드·음량 맞춤·거꾸로 포함)를 임시로 만들어 재생
+  - **내보내기/변환**: MP3 · M4A(AAC) · WAV · FLAC · AIFF · OGG(Opus), 비트레이트 96~320k, 원본 폴더 또는 다운로드에 `이름-편집.확장자`로 저장
+    (진행률 · 중단 · 예상 길이/크기 · Finder에서 보기). 편집 없이 형식만 골라 내보내면 그대로 변환기. ffmpeg 필요
 - **퀵 CCTV** 탭
   - **iPhone을 CCTV로**: 연속성 카메라(iOS 16+, 같은 Apple 계정, Wi-Fi·블루투스)를 켜고 폰을 잠근 채 가로로 세워 두면 목록에
     "OO의 iPhone 카메라"가 나타나고, 시작을 누르면 실시간 영상이 말풍선 안에 보임(AVFoundation, 첫 실행 때 카메라 권한).
@@ -286,6 +299,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
+| `ATFM_DEBUG_AUDIO_FILE=<경로>` (+`ATFM_DEBUG_AUDIO_EDIT=시작,끝,배속,페이드아웃` · `ATFM_DEBUG_AUDIO_PLAY=muted`) | 오디오 편집기에 파일을 연 채 시작하고 샘플 편집을 적용합니다; muted는 소리 없이 2초 재생해 재생 위치가 배속대로 가는지 로그로 남깁니다. `ATFM_PROBE_AUDIOEDIT="입력\|출력\|시작\|끝\|배속\|플래그" ATFM --probe`는 실제 내보내기를 돌려 필터와 결과 길이를 출력 (플래그: nopitch, reverse, norm, fade, gain) |
 | `ATFM_PROBE_BRIDGE=<초> ATFM --probe` | 브리지 서버를 그 시간 동안 열고 연결된 확장의 브라우저·탭 수·활성 탭, 테스트 스크립트 실행 결과를 출력합니다 |
 | `ATFM_DEBUG_CCTV_SAMPLE=1` · `ATFM_DEBUG_CCTV_STREAM=<url>` (+`ATFM_DEBUG_CCTV_LOG=1`) | 퀵 CCTV를 생성한 샘플 영상(6초마다 지나가는 방문자) 또는 지정한 MJPEG 주소로 시작하고 움직임 감지를 켭니다 (설정은 저장하지 않음, LOG는 연결/재연결 기록); `ATFM_PROBE_CCTV=1 ATFM --probe`는 보이는 카메라와 권한 상태 출력, `ATFM_PROBE_STREAM=<url>`은 MJPEG 주소에 6초 연결해 찾은 경로·프레임 수 출력 |
 | `ATFM_DEBUG_MEMO=notes\|storyboard` · `ATFM_DEBUG_STORYBOARD_SAMPLE=1` (+`ATFM_DEBUG_STORYBOARD_MUSIC=/path.wav` · `_IMAGE=/path.png` · `_TRIM=4,34`) | 메모 탭의 섹션을 고르고, 도형·텍스트·스케치가 든 샘플 스토리보드(선택 시 배경음악까지)를 만들어 둡니다 (스냅샷용) |
@@ -321,6 +335,7 @@ Sources/ATFM
 ├── Network/     인터페이스 카운터 + nettop 스트리밍, 속도 측정
 ├── Actions/     빠른 동작 (앱 정리 AppCleaner, 백라이트, 잠금, Finder 설정, 휴지통, 디스크 추출)
 ├── Notes/       미니 메모 (QuickNotesStore, notes.json 자동 저장)
+├── AudioEdit/   오디오 편집기 (AudioEditor: AVAudioEngine 미리 듣기(자르기·배속·음정·게인), 파형, ffmpeg 필터 체인 내보내기)
 ├── Bridge/      Zen·Firefox 브리지 (BrowserBridge: Network.framework WebSocket 서버, 탭/활성 탭, exec)
 ├── CCTV/        퀵 CCTV (CCTVMonitor: AVCaptureSession 카메라/연속성 카메라 · MJPEGClient · MotionDetector 격자 차분 · 녹화 · 플로팅 창)
 ├── Storyboard/  스토리보드 (모델·StoryboardStore: 장면/도형/스케치, AVAudioPlayer 재생 + 파형, 장면 구간 cuts, 큰 창)
