@@ -264,6 +264,17 @@
 
 데이터는 `~/Library/Application Support/ATFM/clipboard.sqlite` 에 SQLite로 저장됩니다.
 
+## 가볍게 돌아가도록
+
+- 말풍선이 닫혀 있거나 다른 탭을 보고 있을 때는 그리기 작업을 멈춥니다: 미니 플레이어의 진행 바·가사 싱크용 0.5초 시계는 보이는 화면이 있을 때만 돌고,
+  숨겨진 미니 플레이어의 비주얼라이저 애니메이션(24fps)도 멈춥니다(이게 재생 중 유휴 CPU 3~4%의 원인이었음). 날짜 탭 시계·타이머 숫자의
+  타임라인도 말풍선이 숨겨지면 사실상 멈춤
+- 실행 때 하지 않는 일: 카메라 목록 조회(퀵 CCTV 탭을 열 때), Core Audio 장치 바인딩·시스템 볼륨(사운드 탭·미니 플레이어가 보일 때),
+  스토리보드 배경음악 플레이어·파형(스토리보드 화면이 보일 때). 초기화 전체가 약 60 ms, 프로세스 시작부터 준비까지 0.9초
+- 자동 스크롤은 브라우저 목록을 프로세스 목록 한 번으로 구하고, 바뀐 게 없으면 관찰 가능한 값을 다시 쓰지 않습니다
+- 캐시 상한: 앱 아이콘 400개, 가사 기억 80곡, 클립보드 썸네일 400개(NSCache)
+- 릴리스 빌드는 `-O -wmo -dead_strip`(모듈 전체 최적화 + 안 쓰는 코드 제거). 유휴(말풍선 닫힘) CPU 약 0.4%, 스레드 7개
+
 ## 빌드
 
 Xcode 없이 Command Line Tools만 있으면 됩니다 (macOS 14+, Swift 5.9+).
@@ -299,6 +310,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
+| `ATFM_DEBUG_LAUNCH_TIMING=1` | 실행 시 각 초기화 단계가 걸린 시간을 로그로 남깁니다 (전체 초기화 ≈ 60 ms) |
 | `ATFM_DEBUG_AUDIO_FILE=<경로>` (+`ATFM_DEBUG_AUDIO_EDIT=시작,끝,배속,페이드아웃` · `ATFM_DEBUG_AUDIO_PLAY=muted`) | 오디오 편집기에 파일을 연 채 시작하고 샘플 편집을 적용합니다; muted는 소리 없이 2초 재생해 재생 위치가 배속대로 가는지 로그로 남깁니다. `ATFM_PROBE_AUDIOEDIT="입력\|출력\|시작\|끝\|배속\|플래그" ATFM --probe`는 실제 내보내기를 돌려 필터와 결과 길이를 출력 (플래그: nopitch, reverse, norm, fade, gain) |
 | `ATFM_PROBE_BRIDGE=<초> ATFM --probe` | 브리지 서버를 그 시간 동안 열고 연결된 확장의 브라우저·탭 수·활성 탭, 테스트 스크립트 실행 결과를 출력합니다 |
 | `ATFM_DEBUG_CCTV_SAMPLE=1` · `ATFM_DEBUG_CCTV_STREAM=<url>` (+`ATFM_DEBUG_CCTV_LOG=1`) | 퀵 CCTV를 생성한 샘플 영상(6초마다 지나가는 방문자) 또는 지정한 MJPEG 주소로 시작하고 움직임 감지를 켭니다 (설정은 저장하지 않음, LOG는 연결/재연결 기록); `ATFM_PROBE_CCTV=1 ATFM --probe`는 보이는 카메라와 권한 상태 출력, `ATFM_PROBE_STREAM=<url>`은 MJPEG 주소에 6초 연결해 찾은 경로·프레임 수 출력 |

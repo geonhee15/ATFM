@@ -23,6 +23,8 @@ struct StoryboardView: View {
         .padding(.horizontal, inWindow ? 20 : 0)
         .padding(.vertical, inWindow ? 16 : 0)
         .frame(maxWidth: inWindow ? 1100 : .infinity)
+        .onAppear { store.viewAppeared() }
+        .onDisappear { store.viewDisappeared() }
     }
 
     // MARK: Board bar

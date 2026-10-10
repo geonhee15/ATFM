@@ -555,8 +555,10 @@ struct DatesView: View {
 // MARK: - Clock
 
 private struct ClockCard: View {
+    @Environment(\.bubbleVisible) private var visible
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: .now, by: visible ? 1 : 3600)) { context in
             let now = context.date
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {

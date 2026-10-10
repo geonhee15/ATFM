@@ -42,6 +42,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var miniPlayer: MiniPlayerController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let launchStart = Date()
+        let timing = ProcessInfo.processInfo.environment["ATFM_DEBUG_LAUNCH_TIMING"] == "1"
+        var lastMark = launchStart
+        func mark(_ name: String) {
+            guard timing else { return }
+            let now = Date()
+            NSLog("ATFM launch: %@ +%.0f ms (total %.0f ms)", name, now.timeIntervalSince(lastMark) * 1000, now.timeIntervalSince(launchStart) * 1000)
+            lastMark = now
+        }
         MainMenuBuilder.install()
 
         let vm = ClipboardViewModel(store: store)
@@ -64,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.toolTip = "ATFM"
         }
         statusItem = item
+        mark("clipboard + status item")
 
         let systemMonitor = SystemMonitor(resolver: identityResolver)
         let networkMonitor = NetworkMonitor(resolver: identityResolver)
@@ -75,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.soundPanel = soundPanel
         appState.cctv = cctv
         appState.audioEditor = audioEditor
+        appState.nowPlaying = nowPlaying
         let cleaner = AppCleaner(resolver: identityResolver, network: networkMonitor)
         cleaner.restoreMonitors = { [weak self] in self?.appState.updateMonitors() }
         cleaner.playingBundleID = { [weak self] in
@@ -83,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.cleaner = cleaner
 
+        mark("monitors + cleaner")
         let checklist = ChecklistStore(directory: store.directory)
         self.checklist = checklist
         let notesDirectory = ProcessInfo.processInfo.environment["ATFM_DEBUG_NOTES_DIR"].map { URL(fileURLWithPath: $0) } ?? store.directory
@@ -99,10 +111,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if parts.count == 2 { storyboards.setTrim(start: parts[0], end: parts[1]) }
             }
         }
+        mark("checklist + notes + storyboards")
         let dates = DateStore(directory: store.directory)
         self.dates = dates
         let holidays = HolidayStore(directory: store.directory)
         self.holidays = holidays
+        mark("dates + holidays")
         let gemini = GeminiChat(directory: store.directory)
         gemini.copyToPasteboard = { [weak monitor] text in
             let pasteboard = NSPasteboard.general
@@ -113,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.gemini = gemini
         let miniPlayer = MiniPlayerController(monitor: nowPlaying)
         self.miniPlayer = miniPlayer
+        mark("gemini + mini player")
         nowPlaying.start()
 
         let root = RootView(appState: appState, viewModel: vm, systemMonitor: systemMonitor,
@@ -122,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, audioEditor: audioEditor, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv, bridge: bridge,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
+        mark("root view")
         let heightOverride = Double(ProcessInfo.processInfo.environment["ATFM_PANEL_HEIGHT"] ?? "")
         let bubble = BubblePanelController(
             size: NSSize(width: BubblePanelController.defaultSize.width, height: heightOverride ?? BubblePanelController.defaultSize.height),
@@ -144,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         UNUserNotificationCenter.current().delegate = self
         observeMenuBarText()
+        mark("bubble + HUD wiring")
         screenTools.hotkeys.handlers = [
             .captureText: { [weak self] in self?.screenTools.captureText() },
             .pickColor: { [weak self] in self?.screenTools.pickColor() },
@@ -178,11 +195,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         chatPrivacy.start()
         screenTools.hotkeys.focusForRecording = { [weak bubble] in bubble?.panel.makeKey() }
         screenTools.hotkeys.registerAll()
+        mark("hotkeys")
         bridge.start()
         autoScroller.bridge = bridge
         chatPrivacy.bridge = bridge
         AppleScriptRunner.bridge = bridge
         autoScroller.start()
+        mark("bridge + autoscroll + privacy (launch done)")
         if let record = env["ATFM_DEBUG_HOTKEY_RECORD"], let action = ToolHotkeys.Action(rawValue: record) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 MainActor.assumeIsolated { self.screenTools.hotkeys.beginRecording(action) }

@@ -48,3 +48,16 @@ extension View {
         modifier(CardBackground(radius: radius))
     }
 }
+
+
+/// Whether the bubble is on screen. Views with periodic timelines slow down to a crawl when it is not.
+private struct BubbleVisibleKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var bubbleVisible: Bool {
+        get { self[BubbleVisibleKey.self] }
+        set { self[BubbleVisibleKey.self] = newValue }
+    }
+}

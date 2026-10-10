@@ -209,8 +209,11 @@ final class AutoScroller {
     @ObservationIgnored var bridge: BrowserBridge?
 
     func refreshBrowsers() {
-        // A connected bridge client proves its browser is running, whatever the process list says.
-        runningBrowsers = ShortsBrowser.allCases.filter { $0.isRunning || ($0.usesBridge && bridge?.client(named: $0.bridgeName) != nil) }
+        // One pass over the process list instead of a lookup per browser; a connected bridge client
+        // proves its browser is running whatever the process list says.
+        let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+        let found = ShortsBrowser.allCases.filter { running.contains($0.rawValue) || ($0.usesBridge && bridge?.client(named: $0.bridgeName) != nil) }
+        if found != runningBrowsers { runningBrowsers = found }
     }
 
     /// Bridge browsers that are running but whose extension isn't connected (so we can say why nothing happens).
@@ -234,15 +237,17 @@ final class AutoScroller {
         refreshBrowsers()
         guard inFlight == 0 || synchronous else { return }
         if runningBrowsers.isEmpty {
-            tabs = []
-            problem = enabled ? "지원하는 브라우저가 실행 중이 아니에요 (Chrome · Brave · Edge · Vivaldi · Arc · Safari · Zen/Firefox+확장)" : nil
-            setupHint = nil
+            if !tabs.isEmpty { tabs = [] }
+            let text = enabled ? "지원하는 브라우저가 실행 중이 아니에요 (Chrome · Brave · Edge · Vivaldi · Arc · Safari · Zen/Firefox+확장)" : nil
+            if problem != text { problem = text }
+            if setupHint != nil { setupHint = nil }
             return
         }
         let active = ScrollPlatform.allCases.filter { platforms.contains($0) }
         if active.isEmpty {
-            tabs = []
-            problem = enabled ? "켜진 플랫폼이 없어요. 아래에서 쇼츠나 릴스를 켜 주세요." : nil
+            if !tabs.isEmpty { tabs = [] }
+            let text = enabled ? "켜진 플랫폼이 없어요. 아래에서 쇼츠나 릴스를 켜 주세요." : nil
+            if problem != text { problem = text }
             return
         }
         for platform in active {

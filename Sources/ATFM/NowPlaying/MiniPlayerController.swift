@@ -46,7 +46,8 @@ final class MiniPlayerController {
     private(set) var isPlaylistExpanded = false
     let audio = AudioLevelMonitor()
     let playlist = PlaylistAnalyzer()
-    let systemVolume = SystemVolume()
+    /// Core Audio HAL is only touched once the volume slider is actually shown (mini player or 사운드 tab).
+    @ObservationIgnored lazy var systemVolume = SystemVolume()
     /// Shows a short notice at the top of the screen (wired to the tools HUD by AppDelegate).
     @ObservationIgnored var notify: ((String, String) -> Void)?
     var currentSize: NSSize {
@@ -296,6 +297,7 @@ final class MiniPlayerController {
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         isVisible = true
+        monitor.setClock(true, for: "mini")
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.2
             panel.animator().alphaValue = 1
@@ -305,6 +307,7 @@ final class MiniPlayerController {
     private func hide() {
         guard isVisible, let panel else { return }
         isVisible = false
+        monitor.setClock(false, for: "mini")
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.15
             panel.animator().alphaValue = 0

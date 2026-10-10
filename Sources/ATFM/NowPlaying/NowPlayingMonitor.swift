@@ -62,11 +62,30 @@ final class NowPlayingMonitor {
         } else {
             launchBridge()
         }
-        let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.now = Date() }
+        updateTicker()
+    }
+
+    /// Views that draw the progress line / synced lyrics register here; the half-second clock only
+    /// ticks while at least one of them is on screen (a hidden mini player used to re-render twice a second).
+    @ObservationIgnored private var clockUsers: Set<String> = []
+
+    func setClock(_ needed: Bool, for user: String) {
+        if needed { clockUsers.insert(user) } else { clockUsers.remove(user) }
+        updateTicker()
+    }
+
+    private func updateTicker() {
+        if clockUsers.isEmpty || stopping {
+            ticker?.invalidate()
+            ticker = nil
+        } else if ticker == nil {
+            now = Date()
+            let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.now = Date() }
+            }
+            RunLoop.main.add(t, forMode: .common)
+            ticker = t
         }
-        RunLoop.main.add(t, forMode: .common)
-        ticker = t
     }
 
     func stop() {

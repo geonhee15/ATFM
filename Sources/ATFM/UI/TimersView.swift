@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimersView: View {
     @Bindable var timers: TimerCenter
+    @Environment(\.bubbleVisible) private var visible
     @AppStorage("timersSection") private var section = "timer"
     @Environment(\.colorScheme) private var scheme
 
@@ -36,7 +37,7 @@ struct TimersView: View {
     private var stopwatch: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(spacing: 12) {
-                TimelineView(.periodic(from: .now, by: timers.stopwatchRunning ? 0.03 : 60)) { context in
+                TimelineView(.periodic(from: .now, by: timers.stopwatchRunning && visible ? 0.03 : 3600)) { context in
                     Text(TimerCenter.format(timers.stopwatchElapsed(at: context.date), showFraction: true))
                         .font(.system(size: 40, weight: .light, design: .rounded))
                         .monospacedDigit()
@@ -92,7 +93,7 @@ struct TimersView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(spacing: 12) {
-                    TimelineView(.periodic(from: .now, by: timers.timerRunning ? 0.25 : 60)) { context in
+                    TimelineView(.periodic(from: .now, by: timers.timerRunning && visible ? 0.25 : 3600)) { context in
                         Text(TimerCenter.format(timers.remaining(at: context.date), showFraction: false))
                             .font(.system(size: 44, weight: .light, design: .rounded))
                             .monospacedDigit()

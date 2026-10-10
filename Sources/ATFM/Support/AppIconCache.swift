@@ -16,8 +16,14 @@ enum AppIconCache {
         let base = image ?? NSWorkspace.shared.icon(for: .applicationBundle)
         let result = (base.copy() as? NSImage) ?? base
         result.size = NSSize(width: size, height: size)
-        cache[key] = result
+        store(result, for: key)
         return result
+    }
+
+    /// Icons are a few KB each; bound the cache so a week of varied file copies can't grow it without limit.
+    private static func store(_ image: NSImage, for key: String) {
+        if cache.count >= 400 { cache.removeAll(keepingCapacity: true) }
+        cache[key] = image
     }
 
     static func fileIcon(path: String, size: CGFloat = 32) -> NSImage {
@@ -26,7 +32,7 @@ enum AppIconCache {
         let base = NSWorkspace.shared.icon(forFile: path)
         let result = (base.copy() as? NSImage) ?? base
         result.size = NSSize(width: size, height: size)
-        cache[key] = result
+        store(result, for: key)
         return result
     }
 }

@@ -346,7 +346,9 @@ final class LyricsController {
 
     let monitor: NowPlayingMonitor
     @ObservationIgnored private var trackKey = ""
-    @ObservationIgnored private var memory: [String: LyricsState] = [:]
+    @ObservationIgnored private var memory: [String: LyricsState] = [:] {
+        didSet { if memory.count > 80 { memory = Dictionary(uniqueKeysWithValues: Array(memory.suffix(40))) } }   // a week of listening shouldn't pile up
+    }
     @ObservationIgnored private var offsets: [String: Double]
     @ObservationIgnored private var task: Task<Void, Never>?
     private static let offsetsKey = "lyricsOffsets"

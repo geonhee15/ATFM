@@ -278,8 +278,14 @@ final class BandAnalyzer: @unchecked Sendable {
             inImag[i] = ordered[2 * i + 1]
         }
         vDSP_DFT_Execute(setup, inReal, inImag, &outReal, &outImag)
-        var split = DSPSplitComplex(realp: &outReal, imagp: &outImag)
-        vDSP_zvabs(&split, 1, &magnitudes, 1, vDSP_Length(Self.n / 2))
+        // The split-complex view must point at buffers that outlive the call (an inout `&array` doesn't).
+        outReal.withUnsafeMutableBufferPointer { realPointer in
+            outImag.withUnsafeMutableBufferPointer { imagPointer in
+                guard let realBase = realPointer.baseAddress, let imagBase = imagPointer.baseAddress else { return }
+                var split = DSPSplitComplex(realp: realBase, imagp: imagBase)
+                vDSP_zvabs(&split, 1, &magnitudes, 1, vDSP_Length(Self.n / 2))
+            }
+        }
         var scale = 2 / Float(Self.n)          // unnormalized DFT → a full-scale sine reads ≈ 1.0 (0 dBFS)
         vDSP_vsmul(magnitudes, 1, &scale, &magnitudes, 1, vDSP_Length(Self.n / 2))
         let binHz = sampleRate / Float(Self.n)

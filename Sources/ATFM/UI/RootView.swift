@@ -196,6 +196,7 @@ struct RootView: View {
             .padding(.bottom, 18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .environment(\.bubbleVisible, appState.isBubbleVisible)
         .overlay(alignment: .leading) { ResizeEdge(axis: .horizontal, edge: .leading, appState: appState) }
         .overlay(alignment: .trailing) { ResizeEdge(axis: .horizontal, edge: .trailing, appState: appState) }
         .overlay(alignment: .bottom) { ResizeEdge(axis: .vertical, edge: .bottom, appState: appState) }

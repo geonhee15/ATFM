@@ -207,7 +207,13 @@ final class StoryboardStore {
 
     private(set) var boards: [Storyboard] = []
     var selectedBoardID: UUID? {
-        didSet { UserDefaults.standard.set(selectedBoardID?.uuidString, forKey: Self.selectedKey); selectedSceneID = board?.scenes.first?.id; selectedItemID = nil; stopPlayback(); loadMusic() }
+        didSet {
+            UserDefaults.standard.set(selectedBoardID?.uuidString, forKey: Self.selectedKey)
+            selectedSceneID = board?.scenes.first?.id
+            selectedItemID = nil
+            stopPlayback()
+            if activeViews > 0 { loadMusic() } else { player = nil }
+        }
     }
     var selectedSceneID: UUID? {
         didSet { if oldValue != selectedSceneID { selectedItemID = nil } }
@@ -246,6 +252,23 @@ final class StoryboardStore {
 
     static func blankBoard(title: String = "새 스토리보드") -> Storyboard {
         Storyboard(title: title, scenes: [StoryScene(), StoryScene(), StoryScene()], music: nil)
+    }
+
+    // MARK: Activity (the audio player and waveform exist only while a storyboard view is on screen)
+
+    @ObservationIgnored private var activeViews = 0
+
+    func viewAppeared() {
+        activeViews += 1
+        if activeViews == 1, music != nil, player == nil { loadMusic() }
+    }
+
+    func viewDisappeared() {
+        activeViews = max(0, activeViews - 1)
+        if activeViews == 0 {
+            stopPlayback()
+            player = nil
+        }
     }
 
     // MARK: Boards

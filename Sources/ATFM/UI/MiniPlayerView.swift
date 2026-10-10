@@ -41,7 +41,7 @@ struct MiniPlayerView: View {
                         .lineLimit(1)
                         .padding(.trailing, 36)
                     HStack(spacing: 6) {
-                        NowPlayingBars(isPlaying: monitor.track?.isPlaying ?? false,
+                        NowPlayingBars(isPlaying: (monitor.track?.isPlaying ?? false) && controller.isVisible,   // hidden panel: no 24 fps animation
                                        levels: controller.audio.signalSeen ? controller.audio.levels : nil)
                             .frame(width: 15, height: 12)
                         Text(monitor.track?.artist ?? "")

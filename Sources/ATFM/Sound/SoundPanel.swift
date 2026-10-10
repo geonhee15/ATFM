@@ -39,6 +39,14 @@ final class SoundPanel {
     init() {
         if #available(macOS 14.2, *) { supported = true } else { supported = false }
         storedVolumes = UserDefaults.standard.dictionary(forKey: Self.volumesKey) as? [String: Double] ?? [:]
+    }
+
+    @ObservationIgnored private var bound = false
+
+    /// First use of the tab: bind the output device and watch for device changes (keeps the HAL idle at launch).
+    private func ensureBound() {
+        guard !bound else { return }
+        bound = true
         bindDevice()
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
@@ -46,7 +54,6 @@ final class SoundPanel {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.outputDeviceChanged() } }
         }
         AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, DispatchQueue.main, block)
-        refresh()
     }
 
     // MARK: Activity (poll only while the tab is visible)
@@ -56,6 +63,7 @@ final class SoundPanel {
         timer?.invalidate()
         timer = nil
         guard active else { return }
+        ensureBound()
         refresh()
         let t = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }

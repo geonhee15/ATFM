@@ -104,7 +104,6 @@ final class CCTVMonitor {
         notifyOnMotion = defaults.object(forKey: "cctvNotify") as? Bool ?? true
         snapshotOnMotion = defaults.object(forKey: "cctvSnapshot") as? Bool ?? true
         recordOnMotion = defaults.bool(forKey: "cctvRecordClip")
-        refreshCameras()
         wireCallbacks()
         observeDevices()
         if ProcessInfo.processInfo.environment["ATFM_DEBUG_CCTV_SAMPLE"] == "1" {   // generated feed, nothing persisted
@@ -190,12 +189,14 @@ final class CCTVMonitor {
 
     func setTabVisible(_ visible: Bool) {
         tabVisible = visible
+        if visible { refreshCameras() }           // AVFoundation discovery is deferred until someone looks
         updateRunning()
     }
 
     func start() {
         userStarted = true
         errorText = nil
+        if cameras.isEmpty { refreshCameras() }
         updateRunning()
     }
 

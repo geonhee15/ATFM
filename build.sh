@@ -21,7 +21,7 @@ BUILD_NUMBER=$(date +%Y%m%d%H%M)
 SDK="$(xcrun --show-sdk-path)"
 ARCH="$(uname -m)"
 
-OPT=(-O)
+OPT=(-O -wmo -Xlinker -dead_strip)        # whole-module optimisation + drop unreachable code
 [[ "$CONFIG" == "debug" ]] && OPT=(-Onone -g)
 mkdir -p build
 
