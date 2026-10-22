@@ -7,6 +7,42 @@ struct TextFormatState: Equatable {
     var italic = false
     var underline = false
     var strikethrough = false
+    var textColor: NSColor?      // nil = default (follows light/dark)
+    var highlight: NSColor?      // nil = none
+}
+
+/// Colours offered in the toolbar. Highlights are translucent so the text stays readable in dark mode too.
+enum NotePalette {
+    static let text: [(name: String, color: NSColor)] = [
+        ("빨강", NSColor(srgbRed: 0.90, green: 0.25, blue: 0.25, alpha: 1)),
+        ("주황", NSColor(srgbRed: 0.95, green: 0.55, blue: 0.15, alpha: 1)),
+        ("갈색", NSColor(srgbRed: 0.62, green: 0.45, blue: 0.20, alpha: 1)),
+        ("초록", NSColor(srgbRed: 0.20, green: 0.65, blue: 0.35, alpha: 1)),
+        ("파랑", NSColor(srgbRed: 0.25, green: 0.50, blue: 0.95, alpha: 1)),
+        ("보라", NSColor(srgbRed: 0.60, green: 0.40, blue: 0.90, alpha: 1)),
+        ("분홍", NSColor(srgbRed: 0.90, green: 0.35, blue: 0.60, alpha: 1)),
+        ("회색", NSColor(srgbRed: 0.50, green: 0.52, blue: 0.56, alpha: 1)),
+    ]
+    static let highlight: [(name: String, color: NSColor)] = [
+        ("노랑", NSColor(srgbRed: 1.00, green: 0.88, blue: 0.25, alpha: 0.55)),
+        ("초록", NSColor(srgbRed: 0.45, green: 0.90, blue: 0.50, alpha: 0.50)),
+        ("파랑", NSColor(srgbRed: 0.45, green: 0.72, blue: 1.00, alpha: 0.50)),
+        ("분홍", NSColor(srgbRed: 1.00, green: 0.55, blue: 0.72, alpha: 0.50)),
+        ("주황", NSColor(srgbRed: 1.00, green: 0.68, blue: 0.35, alpha: 0.55)),
+        ("보라", NSColor(srgbRed: 0.75, green: 0.60, blue: 1.00, alpha: 0.50)),
+    ]
+
+    static func same(_ a: NSColor?, _ b: NSColor?) -> Bool {
+        guard let a = a?.usingColorSpace(.sRGB), let b = b?.usingColorSpace(.sRGB) else { return a == nil && b == nil }
+        return abs(a.redComponent - b.redComponent) < 0.02 && abs(a.greenComponent - b.greenComponent) < 0.02
+            && abs(a.blueComponent - b.blueComponent) < 0.02 && abs(a.alphaComponent - b.alphaComponent) < 0.05
+    }
+
+    /// True when the colour is the plain label colour (or absent) rather than something the user picked.
+    static func isDefaultText(_ color: NSColor?) -> Bool {
+        guard let color else { return true }
+        return color == NSColor.labelColor || color == NSColor.textColor
+    }
 }
 
 /// NSTextView with Google-Docs style shortcuts: ⌘B bold · ⌘I italic · ⌘U underline · ⌘⇧X strikethrough.
@@ -28,6 +64,7 @@ final class FormattingTextView: NSTextView {
         if flags == [.command, .shift] {
             switch key {
             case "x": toggleStrikethrough(); return true
+            case "h": toggleHighlight(); return true
             case "\\", "|": clearFormatting(); return true
             default: break
             }
@@ -54,6 +91,8 @@ final class FormattingTextView: NSTextView {
             storage.beginEditing()
             storage.removeAttribute(.underlineStyle, range: range)
             storage.removeAttribute(.strikethroughStyle, range: range)
+            storage.removeAttribute(.backgroundColor, range: range)
+            storage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
             storage.addAttribute(.font, value: Self.baseFont, range: range)
             storage.endEditing()
             didChangeText()
@@ -62,6 +101,43 @@ final class FormattingTextView: NSTextView {
         typing[.font] = Self.baseFont
         typing[.underlineStyle] = nil
         typing[.strikethroughStyle] = nil
+        typing[.backgroundColor] = nil
+        typing[.foregroundColor] = NSColor.labelColor
+        typingAttributes = typing
+        onFormatChange?(currentFormat())
+    }
+
+    // MARK: Colours
+
+    var lastHighlight: NSColor = NotePalette.highlight[0].color
+
+    /// nil → back to the default label colour (adapts to light/dark).
+    func setTextColor(_ color: NSColor?) {
+        apply(.foregroundColor, value: color ?? NSColor.labelColor)
+    }
+
+    /// nil → remove the highlight.
+    func setHighlight(_ color: NSColor?) {
+        if let color { lastHighlight = color }
+        apply(.backgroundColor, value: color)
+    }
+
+    func toggleHighlight() {
+        let range = selectedRange()
+        let current: Any? = range.length > 0 ? textStorage?.attribute(.backgroundColor, at: range.location, effectiveRange: nil) : typingAttributes[.backgroundColor]
+        setHighlight(current == nil ? lastHighlight : nil)
+    }
+
+    private func apply(_ key: NSAttributedString.Key, value: Any?) {
+        let range = selectedRange()
+        if range.length > 0, let storage = textStorage {
+            storage.beginEditing()
+            if let value { storage.addAttribute(key, value: value, range: range) } else { storage.removeAttribute(key, range: range) }
+            storage.endEditing()
+            didChangeText()
+        }
+        var typing = typingAttributes
+        typing[key] = value
         typingAttributes = typing
         onFormatChange?(currentFormat())
     }
@@ -112,9 +188,17 @@ final class FormattingTextView: NSTextView {
             attributes = typingAttributes
         }
         let traits = NSFontManager.shared.traits(of: (attributes[.font] as? NSFont) ?? Self.baseFont)
+        let foreground = attributes[.foregroundColor] as? NSColor
         return TextFormatState(bold: traits.contains(.boldFontMask), italic: traits.contains(.italicFontMask),
                                underline: (attributes[.underlineStyle] as? Int ?? 0) != 0,
-                               strikethrough: (attributes[.strikethroughStyle] as? Int ?? 0) != 0)
+                               strikethrough: (attributes[.strikethroughStyle] as? Int ?? 0) != 0,
+                               textColor: NotePalette.isDefaultText(foreground) ? nil : foreground,
+                               highlight: attributes[.backgroundColor] as? NSColor)
+    }
+
+    /// Puts the keyboard back in the text after a toolbar popover.
+    func refocus() {
+        window?.makeFirstResponder(self)
     }
 
     override func setSelectedRange(_ charRange: NSRange, affinity: NSSelectionAffinity, stillSelecting: Bool) {
@@ -198,7 +282,10 @@ struct RichTextEditor: NSViewRepresentable {
         mutable.enumerateAttribute(.font, in: full) { value, range, _ in
             if value == nil { mutable.addAttribute(.font, value: FormattingTextView.baseFont, range: range) }
         }
-        mutable.addAttribute(.foregroundColor, value: NSColor.labelColor, range: full)   // follow light/dark
+        // Text without an explicit colour follows light/dark; colours the user picked stay as saved.
+        mutable.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
+            if value == nil { mutable.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range) }
+        }
         textView.textStorage?.setAttributedString(mutable)
         textView.typingAttributes = [.font: FormattingTextView.baseFont, .foregroundColor: NSColor.labelColor]
         textView.undoManager?.removeAllActions()
@@ -221,4 +308,7 @@ final class RichTextEditorHandle {
     func underline() { textView?.toggleUnderline() }
     func strikethrough() { textView?.toggleStrikethrough() }
     func clear() { textView?.clearFormatting() }
+    func textColor(_ color: NSColor?) { textView?.setTextColor(color); textView?.refocus() }
+    func highlight(_ color: NSColor?) { textView?.setHighlight(color); textView?.refocus() }
+    func toggleHighlight() { textView?.toggleHighlight() }
 }

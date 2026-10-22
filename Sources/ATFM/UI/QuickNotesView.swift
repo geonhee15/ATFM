@@ -8,6 +8,8 @@ struct QuickNotesView: View {
     @State private var format = TextFormatState()
     @State private var focusRequest = 0
     @State private var handle = RichTextEditorHandle()
+    @State private var showTextColors = false
+    @State private var showHighlights = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -90,6 +92,38 @@ struct QuickNotesView: View {
             formatButton("italic", on: format.italic, help: "기울임 ⌘I") { handle.italic() }
             formatButton("underline", on: format.underline, help: "밑줄 ⌘U") { handle.underline() }
             formatButton("strikethrough", on: format.strikethrough, help: "취소선 ⌘⇧X") { handle.strikethrough() }
+            Divider().frame(height: 14).padding(.horizontal, 2)
+            Button { showTextColors.toggle() } label: {
+                VStack(spacing: 1) {
+                    Text("A").font(.system(size: 11, weight: .bold))
+                    RoundedRectangle(cornerRadius: 1).fill(Color(nsColor: format.textColor ?? .labelColor)).frame(width: 12, height: 3)
+                }
+                .frame(width: 24, height: 20)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(format.textColor != nil ? Theme.accent.opacity(0.18) : Color.clear))
+                .foregroundStyle(format.textColor != nil ? Theme.accent : Color.secondary)
+            }
+            .buttonStyle(.plain).help("글자 색")
+            .popover(isPresented: $showTextColors, arrowEdge: .bottom) {
+                ColorPalettePopover(title: "글자 색", colors: NotePalette.text, current: format.textColor, noneTitle: "기본", sampleText: false) { color in
+                    handle.textColor(color)
+                    showTextColors = false
+                }
+            }
+            Button { showHighlights.toggle() } label: {
+                Image(systemName: "highlighter")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 20)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(format.highlight.map { Color(nsColor: $0) } ?? Color.clear))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Theme.accent.opacity(format.highlight != nil ? 0.6 : 0), lineWidth: 1))
+                    .foregroundStyle(format.highlight != nil ? Color.primary : Color.secondary)
+            }
+            .buttonStyle(.plain).help("형광펜 ⌘⇧H")
+            .popover(isPresented: $showHighlights, arrowEdge: .bottom) {
+                ColorPalettePopover(title: "형광펜", colors: NotePalette.highlight, current: format.highlight, noneTitle: "없음", sampleText: true) { color in
+                    handle.highlight(color)
+                    showHighlights = false
+                }
+            }
             Spacer()
             Button { handle.clear() } label: {
                 Image(systemName: "textformat.abc.dottedunderline").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
@@ -207,5 +241,52 @@ private struct NoteChip: View {
         }
         .buttonStyle(.plain)
         .help(title)
+    }
+}
+
+
+/// Swatch grid for text colour / highlight, plus "default" and a custom picker.
+private struct ColorPalettePopover: View {
+    let title: String
+    let colors: [(name: String, color: NSColor)]
+    let current: NSColor?
+    let noneTitle: String
+    let sampleText: Bool
+    let pick: (NSColor?) -> Void
+    @State private var custom = Color.red
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 6), count: 4), spacing: 6) {
+                ForEach(Array(colors.enumerated()), id: \.offset) { _, entry in
+                    let selected = NotePalette.same(current, entry.color)
+                    Button { pick(entry.color) } label: {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color(nsColor: entry.color))
+                            .frame(width: 26, height: 26)
+                            .overlay {
+                                if sampleText { Text("가").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary) }
+                            }
+                            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .strokeBorder(selected ? Theme.accent : Color.primary.opacity(0.12), lineWidth: selected ? 2 : 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help(entry.name)
+                }
+            }
+            HStack(spacing: 8) {
+                Button(noneTitle) { pick(nil) }.controlSize(.small)
+                Spacer()
+                ColorPicker("직접", selection: $custom, supportsOpacity: false)
+                    .controlSize(.small).font(.system(size: 11))
+                    .onChange(of: custom) { _, value in
+                        let picked = NSColor(value)
+                        pick(sampleText ? picked.withAlphaComponent(0.5) : picked)
+                    }
+            }
+        }
+        .padding(12)
+        .frame(width: 160)
     }
 }

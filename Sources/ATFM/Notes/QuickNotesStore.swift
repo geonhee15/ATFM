@@ -117,6 +117,8 @@ final class QuickNotesStore {
             case 1: mutable.addAttribute(.font, value: manager.convert(NSFont.systemFont(ofSize: 13), toHaveTrait: .italicFontMask), range: range)
             case 2: mutable.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
             case 3: mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            case 4: mutable.addAttribute(.foregroundColor, value: NotePalette.text[0].color, range: range)
+            case 5: mutable.addAttribute(.backgroundColor, value: NotePalette.highlight[0].color, range: range)
             default: break
             }
             location += range.length + 1
@@ -128,6 +130,7 @@ final class QuickNotesStore {
         var found = false
         attributed.enumerateAttributes(in: NSRange(location: 0, length: attributed.length)) { attrs, _, stop in
             if (attrs[.underlineStyle] as? Int ?? 0) != 0 || (attrs[.strikethroughStyle] as? Int ?? 0) != 0 { found = true; stop.pointee = true; return }
+            if attrs[.backgroundColor] != nil || !NotePalette.isDefaultText(attrs[.foregroundColor] as? NSColor) { found = true; stop.pointee = true; return }
             if let font = attrs[.font] as? NSFont {
                 let traits = NSFontManager.shared.traits(of: font)
                 if traits.contains(.boldFontMask) || traits.contains(.italicFontMask) { found = true; stop.pointee = true }
