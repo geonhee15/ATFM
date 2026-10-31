@@ -18,6 +18,7 @@ final class AppState {
     @ObservationIgnored var cctv: CCTVMonitor?
     @ObservationIgnored var audioEditor: AudioEditor?
     @ObservationIgnored var nowPlaying: NowPlayingMonitor?
+    @ObservationIgnored var autoClicker: AutoClicker?
     @ObservationIgnored var applyAppearance: ((AppearanceMode) -> Void)?
     @ObservationIgnored var resizeBubble: ((BubbleResizeDelta) -> Void)?
     @ObservationIgnored var resetBubbleSize: (() -> Void)?
@@ -53,5 +54,6 @@ final class AppState {
         cctv?.setTabVisible(isBubbleVisible && tab == .cctv)
         audioEditor?.setActive(isBubbleVisible && tab == .audio)
         nowPlaying?.setClock(isBubbleVisible && tab == .player, for: "bubble")
+        autoClicker?.setTabVisible(isBubbleVisible && tab == .autoclick)
     }
 }

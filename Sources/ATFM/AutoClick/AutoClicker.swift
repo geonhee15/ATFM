@@ -143,8 +143,56 @@ final class AutoClicker {
 
     // MARK: Permission
 
+    @ObservationIgnored private var permissionTimer: Timer?
+    @ObservationIgnored private var tabVisible = false
+
     func refreshPermission() {
-        accessibilityTrusted = AXIsProcessTrusted()
+        let trusted = AXIsProcessTrusted()
+        if trusted != accessibilityTrusted {
+            accessibilityTrusted = trusted
+            if trusted { notify?("오토클릭", "손쉬운 사용 권한이 확인됐어요") }
+        }
+        updatePermissionWatch()
+    }
+
+    /// While the tab is open and the permission is missing, re-check every second so flipping the
+    /// switch in System Settings is picked up without reopening the bubble.
+    func setTabVisible(_ visible: Bool) {
+        tabVisible = visible
+        if visible { refreshPermission() } else { updatePermissionWatch() }
+    }
+
+    private func updatePermissionWatch() {
+        let wanted = tabVisible && !accessibilityTrusted
+        if wanted, permissionTimer == nil {
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshPermission() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            permissionTimer = timer
+        } else if !wanted {
+            permissionTimer?.invalidate()
+            permissionTimer = nil
+        }
+    }
+
+    /// The reset command for the stuck case (an entry that belongs to an older copy of the app).
+    static let resetCommand = "tccutil reset Accessibility com.geonhee.atfm"
+
+    func copyResetCommand() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(Self.resetCommand, forType: .string)
+        notify?("복사됨", Self.resetCommand)
+    }
+
+    func relaunch() {
+        let path = Bundle.main.bundleURL.path
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.6; /usr/bin/open \"\(path)\""]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 
     /// Shows the system prompt (adds ATFM to the Accessibility list, unchecked) — only from a user tap.

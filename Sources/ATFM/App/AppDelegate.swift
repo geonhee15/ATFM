@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.cctv = cctv
         appState.audioEditor = audioEditor
         appState.nowPlaying = nowPlaying
+        appState.autoClicker = autoClicker
         let cleaner = AppCleaner(resolver: identityResolver, network: networkMonitor)
         cleaner.restoreMonitors = { [weak self] in self?.appState.updateMonitors() }
         cleaner.playingBundleID = { [weak self] in

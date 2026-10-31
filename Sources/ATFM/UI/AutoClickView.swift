@@ -100,17 +100,31 @@ struct AutoClickView: View {
     }
 
     private var permissionCard: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("손쉬운 사용 권한이 필요해요").font(.system(size: 12, weight: .semibold))
-                Text("다른 앱에 클릭을 보내려면 시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 ATFM을 켜 주세요").font(.system(size: 10.5)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("손쉬운 사용 권한이 필요해요").font(.system(size: 12, weight: .semibold))
+                    Text("시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 ATFM을 켜 주세요. 켜면 이 카드는 1초 안에 사라져요.")
+                        .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
             }
-            Spacer()
-            VStack(spacing: 4) {
-                Button("권한 요청") { clicker.requestPermission() }.controlSize(.small)
-                Button("설정 열기") { clicker.openAccessibilitySettings() }.controlSize(.small)
+            HStack(spacing: 6) {
+                Button("권한 요청") { clicker.requestPermission() }
+                Button("설정 열기") { clicker.openAccessibilitySettings() }
+                Button("다시 확인") { clicker.refreshPermission() }
+                Spacer()
+                Button("앱 다시 시작") { clicker.relaunch() }
+            }
+            .controlSize(.small)
+            Text("목록에 ATFM이 켜져 있는데도 안 사라지면: 목록에서 ATFM을 −로 지우고 + 로 ~/Applications/ATFM.app을 다시 추가한 뒤 '앱 다시 시작'. 그래도 안 되면 터미널에서 아래 명령으로 항목을 초기화하고 다시 켜 주세요.")
+                .font(.system(size: 10)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Text(AutoClicker.resetCommand).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                Button { clicker.copyResetCommand() } label: { Image(systemName: "doc.on.doc").font(.system(size: 10)) }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("명령 복사")
+                Spacer()
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
