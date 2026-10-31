@@ -6,7 +6,7 @@ import Observation
 @Observable
 final class ToolHotkeys {
     enum Action: String, CaseIterable, Identifiable {
-        case captureText, pickColor, chatPrivacy
+        case captureText, pickColor, chatPrivacy, autoClick
 
         var id: String { rawValue }
 
@@ -15,6 +15,7 @@ final class ToolHotkeys {
             case .captureText: return "화면 텍스트 복사"
             case .pickColor: return "화면 색상 추출"
             case .chatPrivacy: return "채팅 프라이버시 켜기/끄기"
+            case .autoClick: return "오토클릭 시작/정지"
             }
         }
 
@@ -23,6 +24,7 @@ final class ToolHotkeys {
             case .captureText: return KeyCombo(keyCode: 18, flags: [.command, .shift])   // ⌘⇧1
             case .pickColor: return KeyCombo(keyCode: 19, flags: [.command, .shift])     // ⌘⇧2
             case .chatPrivacy: return KeyCombo(keyCode: 11, flags: [.command, .option, .shift])   // ⌘⌥⇧B
+            case .autoClick: return KeyCombo(keyCode: 0, flags: [.command, .option, .shift])      // ⌘⌥⇧A
             }
         }
     }

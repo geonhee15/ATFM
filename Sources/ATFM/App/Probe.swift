@@ -393,6 +393,19 @@ enum Probe {
             print("frames in 6 s: \(frames)")
             return
         }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_AUTOCLICK"] == "1" {   // permission state + a 2 s dry run (no events posted)
+            print("accessibility trusted: \(AXIsProcessTrusted())")
+            let clicker = AutoClicker()
+            clicker.intervalMs = 50
+            clicker.repeatMode = .forever
+            clicker.startDryRun()
+            let deadline = Date().addingTimeInterval(2)
+            while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+            clicker.stop(reason: "probe")
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            print("dry run: \(clicker.clickCount) ticks in 2 s at 50 ms (expected ≈ 40), stop reason: \(clicker.lastStopReason ?? "-")")
+            return
+        }
         if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_AUDIOEDIT"] {
             // "in|out|start|end|speed|flags" — flags: nopitch, reverse, norm, fade, gain. Prints the ffmpeg filter and the result length.
             let parts = spec.components(separatedBy: "|")

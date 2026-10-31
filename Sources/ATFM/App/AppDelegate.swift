@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let audioEditor = AudioEditor()
     private let screenTools = ScreenTools()
     private let autoScroller = AutoScroller()
+    private let autoClicker = AutoClicker()
     private let chatPrivacy = ChatPrivacyMode()
     private let cctv = CCTVMonitor()
     private let bridge = BrowserBridge()
@@ -134,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             networkMonitor: networkMonitor, speedTester: speedTester,
                             quickActions: quickActions, cleaner: cleaner, checklist: checklist, notes: notes, storyboards: storyboards, dates: dates, externalCalendar: externalCalendar, holidays: holidays, dictionary: dictionary,
                             calculator: calculator, translator: translator, timers: timers,
-                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, audioEditor: audioEditor, screenTools: screenTools, autoScroller: autoScroller, chatPrivacy: chatPrivacy, cctv: cctv, bridge: bridge,
+                            keepAwake: keepAwake, gemini: gemini, converter: converter, downloader: downloader, audioEditor: audioEditor, screenTools: screenTools, autoScroller: autoScroller, autoClicker: autoClicker, chatPrivacy: chatPrivacy, cctv: cctv, bridge: bridge,
                             nowPlaying: nowPlaying, miniPlayer: miniPlayer, sound: soundPanel,
                             quit: { NSApp.terminate(nil) })
         mark("root view")
@@ -165,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .captureText: { [weak self] in self?.screenTools.captureText() },
             .pickColor: { [weak self] in self?.screenTools.pickColor() },
             .chatPrivacy: { [weak self] in self?.chatPrivacy.toggle() },
+            .autoClick: { [weak self] in self?.autoClicker.toggle() },
         ]
         audioEditor.notify = { [weak self] title, message in
             self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "waveform"), duration: 2.5)
@@ -188,6 +190,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         cctv.notify = { [weak self] title, message in
             self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "web.camera"), duration: 2.5)
+        }
+        autoClicker.notify = { [weak self] title, message in
+            self?.screenTools.hud.show(.message("\(title) · \(message)", symbol: "cursorarrow.click.2"), duration: 2)
+        }
+        if env["ATFM_DEBUG_AUTOCLICK_DRYRUN"] == "1" {    // screenshots: the loop runs, nothing is posted
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { MainActor.assumeIsolated { self.autoClicker.startDryRun() } }
         }
         chatPrivacy.onToggled = { [weak self] on in
             self?.screenTools.hud.show(.message(on ? "채팅 프라이버시 켬" : "채팅 프라이버시 끔", symbol: on ? "eye.slash.fill" : "eye"), duration: 1.4)
@@ -460,6 +468,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         cctv.stop()
         bridge.stop()
         audioEditor.shutdown()
+        autoClicker.shutdown()
         notes?.flush()
         storyboards?.flush()
         soundPanel.stopAll()

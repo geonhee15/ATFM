@@ -2,7 +2,7 @@
 
 맥을 쓰면서 "이거 하나 더 있었으면…" 싶었던 기능들을 메뉴 막대 앱 하나에 모아가는 프로젝트입니다.
 클립보드 기록으로 시작해서 체크리스트 · 메모(미니 메모·스토리보드) · 시스템/네트워크 모니터 · 빠른 동작 · 빠른 툴(화면 OCR·스포이드) ·
-쇼츠 자동 스크롤 · 파일 변환/다운로드 · 오디오 편집기 · 미니 플레이어 · 간편 AI까지, 탭 하나씩 늘려가고 있습니다.
+쇼츠 자동 스크롤 · 오토클릭 · 파일 변환/다운로드 · 오디오 편집기 · 미니 플레이어 · 간편 AI까지, 탭 하나씩 늘려가고 있습니다.
 
 ## 스크린샷
 
@@ -47,6 +47,7 @@
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/audio.png" width="230"><br><b>오디오 편집기</b><br><sub>파형에서 자르기 · 배속 · 볼륨/페이드 · 형식 변환</sub></td>
+    <td align="center"><img src="docs/screenshots/autoclick.png" width="230"><br><b>오토클릭</b><br><sub>간격 · 버튼 · 위치 · 반복 · ⌘⌥⇧A</sub></td>
   </tr>
 </table>
 
@@ -167,6 +168,13 @@
   탭 목록·활성 탭을 알려주고 요청한 스크립트를 탭에서 실행해요. 이걸로 자동 스크롤(쇼츠·릴스) · 채팅 프라이버시(Zen 탭 주소·페이지 구조) ·
   플레이리스트 분석(YouTube 탭 찾기)이 Zen/Firefox에서도 똑같이 동작. 자동 스크롤 탭의 "Zen · Firefox 연결" 카드에서 설치 안내:
   about:config `xpinstall.signatures.required=false` 후 .xpi 끌어다 놓기(영구), 또는 about:debugging 임시 로드
+- **오토클릭** 탭
+  - 정한 **간격**(5ms~60분, 프리셋 10ms·50ms·100ms·250ms·500ms·1초·5초, ±무작위 흔들림)으로 **왼쪽/오른쪽/가운데** 버튼을 **한 번/두 번** 클릭.
+    위치는 **마우스 따라가기** 또는 **고정 위치**(X·Y 입력, "3초 뒤 마우스 위치 저장"). 반복은 **멈출 때까지 / N회 / N초 동안**
+  - 시작: 패널 버튼(기본 3초 카운트다운 — 그 사이 클릭할 창으로 이동) 또는 전역 단축키 **⌘⌥⇧A**(바로 시작/정지, 패널에서 변경).
+    실행 중 횟수·경과 표시, 상단 팝업으로 시작/정지 알림
+  - 안전장치: 단축키·Esc(전역 키 모니터)로 언제든 정지, 고정 위치 모드에서 마우스를 24px 넘게 움직이면 자동 정지, 횟수/시간 제한
+  - CGEvent로 클릭을 보내므로 **손쉬운 사용** 권한이 필요(패널의 안내 카드에서 요청/설정 열기). 클릭 루프는 전용 큐에서 돌고 UI는 0.1초마다만 갱신
 - **자동 스크롤** 탭 (YouTube 쇼츠 · Instagram 릴스)
   - 브라우저의 쇼츠/릴스 탭을 지켜보다가 한 편이 끝나면 다음 편으로 자동으로 넘깁니다. 다른 창에서 작업 중이어도 계속 동작. 플랫폼별 켜기/끄기
   - **Instagram 릴스**: 마크업이 난독화돼 있어 구조로 찾음 — 화면 중앙에 가장 가까운 재생 중 `<video>`, 그 스크롤 컨테이너, aria-label(Next/다음) 버튼.
@@ -311,6 +319,7 @@ Xcode가 있다면 `Package.swift` 를 열어서 빌드해도 됩니다.
 | `ATFM_DEBUG_DATA_DIR=<dir>` | 클립보드 DB · 체크리스트 · 메모 · AI 대화를 모두 지정 폴더에서 읽고 씁니다 (`Scripts/screenshots.sh`가 사용) |
 | `ATFM_DEBUG_NOWPLAYING_SAMPLE=1` | 실제 재생 정보 대신 가짜 트랙을 미니 플레이어에 띄웁니다 (스크린샷용) |
 | `ATFM_DEBUG_NOTES_DIR=<dir>` | 미니 메모를 실제 데이터 대신 지정 폴더의 notes.json으로 읽고 씁니다 (스냅샷용) |
+| `ATFM_DEBUG_AUTOCLICK_DRYRUN=1` | 오토클릭을 "연습" 모드로 시작합니다 — 루프는 돌지만 클릭을 보내지 않음 (스냅샷용); `ATFM_PROBE_AUTOCLICK=1 ATFM --probe`는 손쉬운 사용 권한 상태와 2초 연습 실행의 틱 수 출력 |
 | `ATFM_DEBUG_LAUNCH_TIMING=1` | 실행 시 각 초기화 단계가 걸린 시간을 로그로 남깁니다 (전체 초기화 ≈ 60 ms) |
 | `ATFM_DEBUG_AUDIO_FILE=<경로>` (+`ATFM_DEBUG_AUDIO_EDIT=시작,끝,배속,페이드아웃` · `ATFM_DEBUG_AUDIO_PLAY=muted`) | 오디오 편집기에 파일을 연 채 시작하고 샘플 편집을 적용합니다; muted는 소리 없이 2초 재생해 재생 위치가 배속대로 가는지 로그로 남깁니다. `ATFM_PROBE_AUDIOEDIT="입력\|출력\|시작\|끝\|배속\|플래그" ATFM --probe`는 실제 내보내기를 돌려 필터와 결과 길이를 출력 (플래그: nopitch, reverse, norm, fade, gain) |
 | `ATFM_PROBE_BRIDGE=<초> ATFM --probe` | 브리지 서버를 그 시간 동안 열고 연결된 확장의 브라우저·탭 수·활성 탭, 테스트 스크립트 실행 결과를 출력합니다 |
@@ -358,6 +367,7 @@ Sources/ATFM
 ├── Dates/       날짜 (DateStore: 일정·D-day 모델, 반복 계산, dates.json · ExternalCalendar: EventKit 읽기 · HolidayStore: 공휴일 피드)
 ├── Dictionary/  사전 (DictionaryServices 래퍼, 온라인 영영, 주기율표 데이터 Resources/elements.json)
 ├── Tools/       빠른 툴 (영역 선택 오버레이 → Vision OCR, 스포이드 HEX, 상단 HUD, 전역 단축키)
+├── AutoClick/   오토클릭 (AutoClicker: 전용 큐 클릭 루프 + ClickRun 공유 상태, CGEvent 마우스 이벤트, Esc 모니터, 고정 위치 캡처)
 ├── AutoScroll/  자동 스크롤 (쇼츠·릴스 탭 폴링 osascript + 페이지 에이전트 JS ShortsAgent/ReelsAgent)
 ├── Privacy/     채팅 프라이버시 (앞창 추적 + Vision 텍스트 사각형 클러스터링 ChatLayoutAnalyzer, 유리 오버레이 PrivacyOverlay, 샘플 창)
 ├── UI/          SwiftUI 화면 (탭별 화면 전부)

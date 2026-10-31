@@ -14,6 +14,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case network
     case actions
     case tools
+    case autoclick
     case autoscroll
     case privacy
     case cctv
@@ -41,6 +42,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .network: return "network"
         case .actions: return "bolt"
         case .tools: return "wand.and.stars"
+        case .autoclick: return "cursorarrow.click.2"
         case .autoscroll: return "play.square.stack"
         case .privacy: return "eye.slash"
         case .cctv: return "web.camera"
@@ -68,6 +70,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .network: return "네트워크"
         case .actions: return "빠른 동작"
         case .tools: return "빠른 툴"
+        case .autoclick: return "오토클릭"
         case .autoscroll: return "자동 스크롤"
         case .privacy: return "채팅 프라이버시"
         case .cctv: return "퀵 CCTV"
@@ -106,6 +109,7 @@ struct RootView: View {
     var audioEditor: AudioEditor
     var screenTools: ScreenTools
     var autoScroller: AutoScroller
+    var autoClicker: AutoClicker
     var chatPrivacy: ChatPrivacyMode
     var cctv: CCTVMonitor
     var bridge: BrowserBridge
@@ -157,6 +161,8 @@ struct RootView: View {
                     QuickActionsView(appState: appState, quick: quickActions, cleaner: cleaner)
                 case .tools:
                     ScreenToolsView(tools: screenTools)
+                case .autoclick:
+                    AutoClickView(clicker: autoClicker, hotkeys: screenTools.hotkeys)
                 case .autoscroll:
                     AutoScrollView(scroller: autoScroller, bridge: bridge)
                 case .privacy:
