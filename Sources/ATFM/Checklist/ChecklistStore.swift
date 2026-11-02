@@ -38,10 +38,20 @@ extension ChecklistItem {
 }
 
 enum Deadline {
+    /// Always 24-hour ("18:00"), whatever the system's 12/24-hour setting — the badge has no room for 오전/오후.
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar.current
+        f.timeZone = TimeZone.current
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
     /// "오늘 18:00", "내일 09:00", "금요일 14:00", "9월 12일 18:00", "지난주 …" style label.
     static func label(_ date: Date, now: Date = Date()) -> String {
         let calendar = Calendar.current
-        let time = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute())
+        let time = timeFormatter.string(from: date)
         if calendar.isDateInToday(date) { return "오늘 " + time }
         if calendar.isDateInTomorrow(date) { return "내일 " + time }
         if calendar.isDateInYesterday(date) { return "어제 " + time }
