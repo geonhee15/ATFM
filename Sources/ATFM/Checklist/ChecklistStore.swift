@@ -12,9 +12,29 @@ struct ChecklistItem: Identifiable, Codable, Equatable {
     var archivedAt: Date? = nil
     /// Optional deadline (date + time).
     var dueAt: Date? = nil
+    /// "Someday" task: nothing to do with today or any date. Stays on the list across daily rollovers until it's done.
+    var isSomeday: Bool = false
 
     var isArchived: Bool { archiveDay != nil }
     var isOverdue: Bool { !isDone && (dueAt.map { $0 < Date() } ?? false) }
+}
+
+extension ChecklistItem {
+    enum CodingKeys: String, CodingKey { case id, text, isDone, createdAt, doneAt, archiveDay, archivedAt, dueAt, isSomeday }
+
+    /// Tolerates files written before `isSomeday` existed.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        text = try c.decode(String.self, forKey: .text)
+        isDone = try c.decode(Bool.self, forKey: .isDone)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        doneAt = try c.decodeIfPresent(Date.self, forKey: .doneAt)
+        archiveDay = try c.decodeIfPresent(String.self, forKey: .archiveDay)
+        archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        dueAt = try c.decodeIfPresent(Date.self, forKey: .dueAt)
+        isSomeday = try c.decodeIfPresent(Bool.self, forKey: .isSomeday) ?? false
+    }
 }
 
 enum Deadline {
@@ -109,7 +129,7 @@ final class ChecklistStore {
     // MARK: Derived lists
 
     var activeItems: [ChecklistItem] {
-        let list = items.filter { !$0.isArchived && !$0.isDone }
+        let list = items.filter { !$0.isArchived && !$0.isDone && !$0.isSomeday }
         guard sortByDue else { return list }
         return list.sorted { a, b in
             switch (a.dueAt, b.dueAt) {
@@ -119,6 +139,10 @@ final class ChecklistStore {
             default: return a.createdAt < b.createdAt
             }
         }
+    }
+    /// Unfinished "someday" tasks, oldest first.
+    var somedayItems: [ChecklistItem] {
+        items.filter { !$0.isArchived && !$0.isDone && $0.isSomeday }.sorted { $0.createdAt < $1.createdAt }
     }
     var doneItems: [ChecklistItem] {
         items.filter { !$0.isArchived && $0.isDone }.sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) }
@@ -142,16 +166,32 @@ final class ChecklistStore {
 
     // MARK: Active list mutations
 
-    func add(_ text: String, dueAt: Date? = nil) {
+    func add(_ text: String, dueAt: Date? = nil, someday: Bool = false) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        items.append(ChecklistItem(id: UUID(), text: trimmed, isDone: false, createdAt: Date(), doneAt: nil, dueAt: dueAt))
+        items.append(ChecklistItem(id: UUID(), text: trimmed, isDone: false, createdAt: Date(), doneAt: nil,
+                                   dueAt: someday ? nil : dueAt, isSomeday: someday))
         scheduleSave()
     }
 
+    /// Setting a deadline turns a "someday" task back into a dated one.
     func setDue(_ id: UUID, _ date: Date?) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         items[index].dueAt = date
+        if date != nil { items[index].isSomeday = false }
+        scheduleSave()
+    }
+
+    /// Flags an item as a "someday" task (drops its deadline) or brings it back to today's list.
+    func setSomeday(_ id: UUID, _ flag: Bool) {
+        guard let index = items.firstIndex(where: { $0.id == id }), items[index].isSomeday != flag else { return }
+        items[index].isSomeday = flag
+        if flag {
+            items[index].dueAt = nil
+        } else {
+            // Back on today's list: count it as made today so the rollover doesn't file it away a minute later.
+            items[index].createdAt = Date()
+        }
         scheduleSave()
     }
 
@@ -212,6 +252,14 @@ final class ChecklistStore {
         let todayStart = Calendar.current.startOfDay(for: Date())
         var changed = false
         for index in items.indices where !items[index].isArchived && items[index].createdAt < todayStart {
+            if items[index].isSomeday {
+                // No date attached: stays until it's done, then files under the day it was finished.
+                guard items[index].isDone, let done = items[index].doneAt, done < todayStart else { continue }
+                items[index].archiveDay = Self.dayString(for: done)
+                items[index].archivedAt = Date()
+                changed = true
+                continue
+            }
             if carryOverUnfinished && !items[index].isDone { continue }
             // An unfinished task with a deadline still ahead (today or later) stays on the list until it's due.
             if !items[index].isDone, let due = items[index].dueAt, due >= todayStart { continue }

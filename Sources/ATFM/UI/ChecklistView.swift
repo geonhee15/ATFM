@@ -9,7 +9,9 @@ struct ChecklistView: View {
     @State private var confirmRemoveAll = false
     @State private var showArchive = ProcessInfo.processInfo.environment["ATFM_DEBUG_ARCHIVE"] == "1"
     @State private var pendingDue: Date?
+    @State private var pendingSomeday = false
     @State private var showDuePicker = false
+    @State private var showSomeday = true
     @State private var confirmClearArchive = false
     @State private var collapsedDays: Set<String> = []
     @FocusState private var inputFocused: Bool
@@ -44,8 +46,8 @@ struct ChecklistView: View {
             .labelsHidden()
             .controlSize(.small)
             .frame(width: 118)
-            if !showArchive, !store.currentItems.isEmpty {
-                Text("\(store.doneItems.count)/\(store.currentItems.count) 완료")
+            if !showArchive, store.currentItems.count > store.somedayItems.count {
+                Text("\(store.doneItems.count)/\(store.currentItems.count - store.somedayItems.count) 완료")
                     .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
@@ -117,6 +119,9 @@ struct ChecklistView: View {
             if let pendingDue {
                 DeadlineBadge(date: pendingDue, isDone: false, compact: true)
                     .onTapGesture { showDuePicker = true }
+            } else if pendingSomeday {
+                SomedayBadge()
+                    .onTapGesture { withAnimation(.snappy(duration: 0.15)) { pendingSomeday = false } }
             }
             Button {
                 showDuePicker.toggle()
@@ -130,8 +135,28 @@ struct ChecklistView: View {
             .buttonStyle(.plain)
             .help("마감 설정")
             .popover(isPresented: $showDuePicker, arrowEdge: .bottom) {
-                DeadlinePicker(date: pendingDue) { pendingDue = $0; showDuePicker = false }
+                DeadlinePicker(date: pendingDue) { picked in
+                    pendingDue = picked
+                    if picked != nil { pendingSomeday = false }
+                    showDuePicker = false
+                }
             }
+            Button {
+                withAnimation(.snappy(duration: 0.15)) {
+                    pendingSomeday.toggle()
+                    if pendingSomeday { pendingDue = nil; showDuePicker = false }
+                }
+            } label: {
+                Image(systemName: pendingSomeday ? "infinity.circle.fill" : "infinity")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(pendingSomeday ? Theme.accent : Color.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(pendingSomeday
+                  ? "언젠가 할 일로 추가돼요 (켜짐) — 날짜 없이, 끝낼 때까지 목록에 남아요"
+                  : "언젠가 할 일 — 오늘·이번 주 같은 기한 없이 살면서 언젠가 할 일. 날짜가 바뀌어도 보관하지 않아요")
         }
         .padding(.horizontal, 11)
         .frame(height: 36)
@@ -142,8 +167,10 @@ struct ChecklistView: View {
         let text = newText
         newText = ""
         let due = pendingDue
+        let someday = pendingSomeday
         pendingDue = nil
-        withAnimation(.snappy(duration: 0.2)) { store.add(text, dueAt: due) }
+        pendingSomeday = false
+        withAnimation(.snappy(duration: 0.2)) { store.add(text, dueAt: due, someday: someday) }
         inputFocused = true
     }
 
@@ -200,6 +227,10 @@ struct ChecklistView: View {
                     if !active.isEmpty {
                         itemsCard(active)
                     }
+                    let someday = store.somedayItems
+                    if !someday.isEmpty {
+                        somedaySection(someday)
+                    }
                     let done = store.doneItems
                     if !done.isEmpty {
                         doneSection(done)
@@ -210,16 +241,43 @@ struct ChecklistView: View {
         }
     }
 
-    private func itemsCard(_ items: [ChecklistItem]) -> some View {
+    private func itemsCard(_ items: [ChecklistItem], inSomedaySection: Bool = false) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                row(item)
+                row(item, inSomedaySection: inSomedaySection)
                 if index < items.count - 1 {
                     Divider().padding(.leading, 44)
                 }
             }
         }
         .card()
+    }
+
+    private func somedaySection(_ list: [ChecklistItem]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { showSomeday.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showSomeday ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                        Image(systemName: "infinity")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("언젠가 \(list.count)")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("기한 없이 살면서 언젠가 할 일. 날짜가 바뀌어도 보관하지 않고 끝낼 때까지 남아요")
+                Spacer()
+            }
+            .padding(.horizontal, 4)
+            if showSomeday {
+                itemsCard(list, inSomedaySection: true)
+            }
+        }
     }
 
     private func doneSection(_ done: [ChecklistItem]) -> some View {
@@ -262,9 +320,10 @@ struct ChecklistView: View {
         }
     }
 
-    private func row(_ item: ChecklistItem) -> some View {
+    private func row(_ item: ChecklistItem, inSomedaySection: Bool = false) -> some View {
         ChecklistRow(
             item: item,
+            showsSomedayBadge: item.isSomeday && !inSomedaySection,
             isEditing: editingID == item.id,
             editingText: $editingText,
             editFocused: $editFocused,
@@ -272,6 +331,7 @@ struct ChecklistView: View {
             onDelete: { withAnimation(.snappy(duration: 0.2)) { store.remove(item.id) } },
             onArchive: item.isDone ? { withAnimation(.snappy(duration: 0.2)) { store.archive(item.id) } } : nil,
             onSetDue: { date in withAnimation(.snappy(duration: 0.2)) { store.setDue(item.id, date) } },
+            onSetSomeday: { flag in withAnimation(.snappy(duration: 0.2)) { store.setSomeday(item.id, flag) } },
             onBeginEdit: {
                 editingID = item.id
                 editingText = item.text
@@ -295,7 +355,7 @@ struct ChecklistView: View {
             Text("할 일을 적어두세요")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("위 칸에 입력하고 Enter · 달력 버튼으로 마감 지정 · 더블클릭으로 수정\n날짜가 바뀌면 전날 목록은 보관함으로 옮겨져요")
+            Text("위 칸에 입력하고 Enter · 달력으로 마감 · ∞는 언젠가 할 일 · 더블클릭 수정\n날짜가 바뀌면 전날 목록은 보관함으로, 언젠가 할 일은 끝낼 때까지 남아요")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -418,6 +478,8 @@ struct ArchivedRow: View {
                     .lineLimit(2)
                 if let due = item.dueAt {
                     DeadlineBadge(date: due, isDone: true, compact: false)
+                } else if item.isSomeday {
+                    SomedayBadge()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -453,6 +515,8 @@ struct ArchivedRow: View {
 
 struct ChecklistRow: View {
     let item: ChecklistItem
+    /// Show the "언젠가" chip (off inside the 언젠가 section, where it would be redundant).
+    var showsSomedayBadge = false
     let isEditing: Bool
     @Binding var editingText: String
     var editFocused: FocusState<Bool>.Binding
@@ -460,6 +524,7 @@ struct ChecklistRow: View {
     let onDelete: () -> Void
     var onArchive: (() -> Void)? = nil
     var onSetDue: ((Date?) -> Void)? = nil
+    var onSetSomeday: ((Bool) -> Void)? = nil
     let onBeginEdit: () -> Void
     let onCommitEdit: () -> Void
     let onCancelEdit: () -> Void
@@ -498,6 +563,8 @@ struct ChecklistRow: View {
                     if let due = item.dueAt {
                         DeadlineBadge(date: due, isDone: item.isDone, compact: false)
                             .onTapGesture { showDuePicker = true }
+                    } else if showsSomedayBadge {
+                        SomedayBadge()
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -540,6 +607,12 @@ struct ChecklistRow: View {
             if item.dueAt != nil {
                 Button { onSetDue?(nil) } label: { Label("마감 해제", systemImage: "calendar.badge.minus") }
             }
+            if let onSetSomeday {
+                Button { onSetSomeday(!item.isSomeday) } label: {
+                    Label(item.isSomeday ? "오늘 목록으로 옮기기" : "언젠가 할 일로",
+                          systemImage: item.isSomeday ? "sun.max" : "infinity")
+                }
+            }
             Button(action: onToggle) { Label(item.isDone ? "완료 취소" : "완료", systemImage: "checkmark.circle") }
             if let onArchive {
                 Button(action: onArchive) { Label("보관", systemImage: "archivebox") }
@@ -550,6 +623,25 @@ struct ChecklistRow: View {
     }
 }
 
+
+/// "∞ 언젠가" chip for tasks that have no date at all.
+struct SomedayBadge: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "infinity")
+                .font(.system(size: 9, weight: .bold))
+            Text("언젠가")
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(Color.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Theme.chipFill(scheme)))
+    }
+}
 
 /// "오늘 18:00" chip; red when overdue, orange within 24 h, gray otherwise / when done.
 struct DeadlineBadge: View {

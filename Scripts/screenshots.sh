@@ -18,6 +18,8 @@ json.dump([
  {"id":str(uuid.uuid4()),"text":"README 스크린샷 올리기","isDone":False,"createdAt":iso(now-datetime.timedelta(hours=1)),"dueAt":lz(due1)},
  {"id":str(uuid.uuid4()),"text":"헬스장 가기","isDone":False,"createdAt":iso(now-datetime.timedelta(hours=2)),"dueAt":lz(due2)},
  {"id":str(uuid.uuid4()),"text":"우유 사기","isDone":False,"createdAt":iso(now-datetime.timedelta(hours=3))},
+ {"id":str(uuid.uuid4()),"text":"기타 배우기","isDone":False,"createdAt":iso(now-datetime.timedelta(days=40)),"isSomeday":True},
+ {"id":str(uuid.uuid4()),"text":"오로라 보러 가기","isDone":False,"createdAt":iso(now-datetime.timedelta(days=12)),"isSomeday":True},
  {"id":str(uuid.uuid4()),"text":"과제 제출","isDone":True,"createdAt":iso(now-datetime.timedelta(hours=5)),"doneAt":iso(now-datetime.timedelta(minutes=40))},
 ], open(D+"/checklist.json","w"), ensure_ascii=False)
 json.dump([

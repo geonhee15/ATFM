@@ -9,7 +9,7 @@
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/clipboard.png" width="230"><br><b>클립보드</b><br><sub>앱별 · 시:분:초 · 검색</sub></td>
-    <td align="center"><img src="docs/screenshots/checklist.png" width="230"><br><b>체크리스트</b><br><sub>마감 배지 · 보관함</sub></td>
+    <td align="center"><img src="docs/screenshots/checklist.png" width="230"><br><b>체크리스트</b><br><sub>마감 배지 · 언젠가 · 보관함</sub></td>
     <td align="center"><img src="docs/screenshots/notes.png" width="230"><br><b>메모 · 미니 메모</b><br><sub>자동 저장 · 서식 · 글자 색 · 형광펜</sub></td>
   </tr>
   <tr>
@@ -81,6 +81,10 @@
   `~/Library/Application Support/ATFM/checklist.json` 에 자동 저장
   - **마감**: 입력창의 달력 버튼(또는 항목 우클릭)으로 날짜+시간 지정. "오늘 18:00" 같은 배지가 붙고 지난 건 빨강·24시간 안은 주황.
     메뉴에서 "마감 임박 순 정렬"
+  - **언젠가 할 일**: 달력 옆 ∞ 버튼을 켜고 적으면 "오늘까지·다음 주까지"가 아니라 살면서 언젠가 할 일로 들어가요.
+    목록 아래 **언젠가** 섹션에 따로 모이고(접기 가능), 날짜가 바뀌어도 보관하지 않고 끝낼 때까지 남아요.
+    마감과는 서로 배타적(마감을 잡으면 보통 할 일로, ∞를 켜면 마감이 빠짐). 항목 우클릭으로 "언젠가 할 일로" / "오늘 목록으로 옮기기".
+    완료하면 끝낸 날짜 아래로 보관돼요
   - **보관함**: 날짜가 바뀌면 전날 목록(완료·미완료 모두)이 그 날짜 아래로 자동 보관(앱이 꺼져 있었으면 다음 실행 때).
     완료한 항목은 "보관" 버튼으로 오늘 날짜에 바로 보관. 보관함에서 날짜별 접기, 되돌리기(오늘 목록으로), 항목/날짜/전체 삭제.
     메뉴의 "미완료는 다음 날로 넘기기"를 켜면 미완료 항목은 보관하지 않고 남김.
