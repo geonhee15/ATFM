@@ -14,10 +14,12 @@ struct DatesView: View {
             VStack(alignment: .leading, spacing: 8) {
                 header
                 if ProcessInfo.processInfo.environment["ATFM_DEBUG_DATES_EDITOR"] == "1" {   // snapshot the editor inline
-                    EntryEditor(entry: DateEntry(title: "제주 여행", year: 2026, month: 9, day: 21, colorIndex: 3, showsInDday: true),
-                                isNew: true) { _ in }
+                    EntryEditor(entry: DateEntry(title: "제주 여행", year: 2026, month: 9, day: 21, colorIndex: 3, showsInDday: true,
+                                                 mirror: external.sample == nil ? nil : CalendarMirror(calendarID: "sample-google-personal")),
+                                isNew: true, external: external) { _ in }
                         .card()
                 }
+                mirrorBanner
                 searchBar
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                     searchResults
@@ -39,7 +41,7 @@ struct DatesView: View {
         .onChange(of: store.visibleMonth) { _, month in external.refresh(around: month) }
         .popover(isPresented: $showEditor, arrowEdge: .top) {
             if let editing {
-                EntryEditor(entry: editing, isNew: !store.entries.contains { $0.id == editing.id }) { result in
+                EntryEditor(entry: editing, isNew: !store.entries.contains { $0.id == editing.id }, external: external) { result in
                     switch result {
                     case .save(let entry): store.update(entry)
                     case .delete(let id): store.delete(id)
@@ -63,6 +65,44 @@ struct DatesView: View {
                 .foregroundStyle(Theme.accent)
         }
         .padding(.horizontal, 2)
+    }
+
+    // MARK: 계정 캘린더 사본 (구글 캘린더에도 추가)
+
+    /// Shown only when a copy could not be written or removed.
+    @ViewBuilder
+    private var mirrorBanner: some View {
+        let pending = store.pendingMirrorCount
+        if store.mirrorNotice != nil || pending > 0 {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+                Text(store.mirrorNotice ?? "계정 캘린더에 아직 못 올린 일정이 \(pending)개 있어요.")
+                    .font(.system(size: 11))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if pending > 0 {
+                    Button("다시 시도") {
+                        external.prepareMirroring()
+                        store.retryPendingMirrors()
+                    }
+                    .controlSize(.mini)
+                }
+                if store.mirrorNotice != nil {
+                    Button { store.dismissMirrorNotice() } label: {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("닫기")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card()
+        }
     }
 
     // MARK: Search
@@ -489,6 +529,21 @@ struct DatesView: View {
         } label: {
             Label(entry.showsInCalendar ? "캘린더에서 빼기" : "캘린더에 표시", systemImage: "calendar")
         }
+        Button {
+            var copy = entry
+            if copy.mirror != nil {
+                copy.mirror = nil
+            } else {
+                external.prepareMirroring()
+                // Nothing to write to yet (no access / no account): open the editor, which explains what is missing.
+                guard let id = external.defaultMirrorCalendarID else { begin(edit: entry); return }
+                copy.mirror = CalendarMirror(calendarID: id)
+            }
+            store.update(copy)
+        } label: {
+            Label(entry.mirror == nil ? "구글 캘린더에도 추가" : "구글 캘린더에서 빼기",
+                  systemImage: entry.mirror == nil ? "arrow.triangle.2.circlepath" : "xmark.circle")
+        }
         if entry.showsInDday {
             Button {
                 var copy = entry; copy.ddayStyle = entry.style == .elapsed ? .countdown : .elapsed
@@ -528,9 +583,15 @@ struct DatesView: View {
 
     private func beginAdd(on day: Date, dday: Bool) {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: day)
-        editing = DateEntry(title: "", year: c.year ?? 2026, month: c.month ?? 1, day: c.day ?? 1,
-                            colorIndex: dday ? 1 : 0, showsInCalendar: !dday, showsInDday: dday,
-                            repeatRule: dday ? .yearly : .none)
+        var entry = DateEntry(title: "", year: c.year ?? 2026, month: c.month ?? 1, day: c.day ?? 1,
+                              colorIndex: dday ? 1 : 0, showsInCalendar: !dday, showsInDday: dday,
+                              repeatRule: dday ? .yearly : .none)
+        if !dday, external.mirrorByDefault {
+            // "구글 캘린더에도 추가" was on for the last new event: start with it on again.
+            external.loadCalendarsIfPossible()
+            entry.mirror = CalendarMirror(calendarID: external.defaultMirrorCalendarID ?? "")
+        }
+        editing = entry
         showEditor = true
     }
 
@@ -713,6 +774,12 @@ private struct EventRow: View {
             if entry.showsInDday {
                 Image(systemName: "flag.fill").font(.system(size: 9)).foregroundStyle(entry.color)
             }
+            if let mirror = entry.mirror {
+                Image(systemName: mirror.needsWrite ? "exclamationmark.arrow.triangle.2.circlepath" : "arrow.triangle.2.circlepath")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(mirror.needsWrite ? Color.orange : Color.secondary)
+                    .help(mirror.needsWrite ? "계정 캘린더에 아직 못 올렸어요" : "구글(계정) 캘린더에도 있는 일정")
+            }
             Text(entry.timeText ?? "종일")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
@@ -808,7 +875,10 @@ private struct EntryEditor: View {
 
     @State var entry: DateEntry
     let isNew: Bool
+    let external: ExternalCalendarSource
     let finish: (Result) -> Void
+    /// The entry already had a copy in an account calendar when the editor opened.
+    private let wasMirrored: Bool
 
     @State private var date: Date
     @State private var time: Date
@@ -816,10 +886,12 @@ private struct EntryEditor: View {
     @State private var hasEnd: Bool
     @FocusState private var titleFocused: Bool
 
-    init(entry: DateEntry, isNew: Bool, finish: @escaping (Result) -> Void) {
+    init(entry: DateEntry, isNew: Bool, external: ExternalCalendarSource, finish: @escaping (Result) -> Void) {
         _entry = State(initialValue: entry)
         self.isNew = isNew
+        self.external = external
         self.finish = finish
+        wasMirrored = !isNew && entry.mirror?.isWritten == true
         _date = State(initialValue: entry.date)
         _endDate = State(initialValue: entry.isMultiDay ? entry.endDate : (Calendar.current.date(byAdding: .day, value: 1, to: entry.date) ?? entry.date))
         _hasEnd = State(initialValue: entry.isMultiDay)
@@ -889,6 +961,8 @@ private struct EntryEditor: View {
                     Toggle("시작일을 1일로 세기 (D+1부터)", isOn: Binding(get: { entry.startsAtOne }, set: { entry.countsStartAsOne = $0 }))
                 }
             }
+            Divider()
+            mirrorSection
             HStack {
                 if !isNew {
                     Button("삭제", role: .destructive) { finish(.delete(entry.id)) }
@@ -903,7 +977,76 @@ private struct EntryEditor: View {
         .controlSize(.small)
         .padding(14)
         .frame(width: 280)
-        .onAppear { titleFocused = true }
+        .onAppear {
+            titleFocused = true
+            external.loadCalendarsIfPossible()
+        }
+        .onChange(of: external.writableCalendars) { _, _ in
+            // Access was just granted: fill in the calendar that could not be picked before.
+            if entry.mirror?.calendarID.isEmpty == true, let id = external.defaultMirrorCalendarID {
+                entry.mirror = CalendarMirror(calendarID: id)
+            }
+        }
+    }
+
+    // MARK: 구글 캘린더에도 추가
+
+    @ViewBuilder
+    private var mirrorSection: some View {
+        Toggle("구글 캘린더에도 추가", isOn: Binding(get: { entry.mirror != nil }, set: { on in
+            if on {
+                external.prepareMirroring()
+                entry.mirror = CalendarMirror(calendarID: external.defaultMirrorCalendarID ?? "")
+            } else {
+                entry.mirror = nil
+            }
+        }))
+        if let mirror = entry.mirror {
+            switch external.mirrorState {
+            case .denied:
+                mirrorHelp("캘린더 접근이 꺼져 있어요.", tone: .red, button: "설정 열기") { external.openPrivacySettings() }
+            case .needsPermission:
+                mirrorHelp("캘린더 접근 권한이 필요해요.", tone: .secondary, button: "권한 요청") { external.requestAccess() }
+            case .noCalendars:
+                mirrorHelp("쓸 수 있는 계정 캘린더가 없어요. 시스템 설정 › 인터넷 계정에서 Google 계정을 추가하고 '캘린더'를 켜 주세요.",
+                           tone: .secondary, button: "인터넷 계정 열기") { external.openInternetAccounts() }
+            case .ready:
+                Picker("캘린더", selection: Binding(get: { entry.mirror?.calendarID ?? "" },
+                                                 set: { entry.mirror = CalendarMirror(calendarID: $0) })) {
+                    if external.calendarInfo(mirror.calendarID) == nil {
+                        Text(mirror.calendarID.isEmpty ? "캘린더 고르기" : "(없어진 캘린더)").tag(mirror.calendarID)
+                    }
+                    ForEach(external.groupedWritableCalendars, id: \.account) { group in
+                        Section(group.account) {
+                            ForEach(group.calendars) { calendar in
+                                Text(calendar.title).tag(calendar.id)
+                            }
+                        }
+                    }
+                }
+                Text(wasMirrored ? "이 캘린더에도 있는 일정이에요. 고치거나 지우면 같이 바뀌어요."
+                                 : "저장하면 이 캘린더에도 같은 일정이 생기고, 고치거나 지우면 같이 바뀌어요. 이 Mac 캘린더 앱의 계정 동기화로 올라가요.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else if wasMirrored {
+            Text("저장하면 계정 캘린더에 있던 사본을 지워요.")
+                .font(.system(size: 10))
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func mirrorHelp(_ text: String, tone: Color, button: String, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(text)
+                .font(.system(size: 10))
+                .foregroundStyle(tone)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(button, action: action)
+                .controlSize(.mini)
+        }
     }
 
     private var spanDaysPreview: Int {
@@ -930,6 +1073,9 @@ private struct EntryEditor: View {
         }
         entry.setEnd(hasEnd ? endDate : nil)
         if entry.title.trimmingCharacters(in: .whitespaces).isEmpty { entry.title = entry.showsInDday ? "기념일" : "일정" }
+        // Remember the choice for the next new calendar event.
+        if let id = entry.mirror?.calendarID, !id.isEmpty { external.mirrorCalendarID = id }
+        if isNew, entry.showsInCalendar { external.mirrorByDefault = entry.mirror != nil }
         finish(.save(entry))
     }
 }

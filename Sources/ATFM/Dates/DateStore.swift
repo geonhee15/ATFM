@@ -37,6 +37,8 @@ struct DateEntry: Identifiable, Codable, Equatable {
     var ddayStyle: DDayStyle? = nil
     /// "처음부터 D+": count the start day itself as day 1 (couple-app style).
     var countsStartAsOne: Bool? = nil
+    /// Copy of this entry in an account calendar (Google etc.) through the Calendar app. nil = ATFM only.
+    var mirror: CalendarMirror? = nil
 
     enum DDayStyle: String, Codable, CaseIterable, Identifiable {
         case countdown, elapsed
@@ -163,6 +165,11 @@ final class DateStore {
     var selectedDay: Date = Calendar.current.startOfDay(for: Date())
     var visibleMonth: Date = Calendar.current.startOfDay(for: Date())
 
+    /// Writes the account-calendar copies of entries that ask for one (`DateEntry.mirror`). nil = nothing is copied.
+    @ObservationIgnored var mirrorBackend: CalendarMirrorBackend?
+    /// Last thing that went wrong with a copy; the 날짜 tab shows it as a banner.
+    private(set) var mirrorNotice: String?
+
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
@@ -174,19 +181,107 @@ final class DateStore {
     // MARK: Editing
 
     func add(_ entry: DateEntry) {
-        entries.append(entry)
+        var fresh = entry
+        // A new entry never shares a copy with another one (복제 carries the original's link): it gets its own event.
+        if let link = fresh.mirror { fresh.mirror = CalendarMirror(calendarID: link.calendarID) }
+        entries.append(syncMirror(fresh, previous: nil))
+        if fresh.mirror != nil { mirrorBackend?.mirrorLinksChanged() }
         scheduleSave()
     }
 
     func update(_ entry: DateEntry) {
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return add(entry) }
-        entries[index] = entry
+        let previous = entries[index]
+        entries[index] = syncMirror(entry, previous: previous)
+        if previous.mirror != entries[index].mirror { mirrorBackend?.mirrorLinksChanged() }
         scheduleSave()
     }
 
     func delete(_ id: UUID) {
+        let mirrored = entries.first(where: { $0.id == id })?.mirror != nil
+        if let entry = entries.first(where: { $0.id == id }), let link = entry.mirror, link.isWritten {
+            removeCopy(link, title: entry.title)
+        }
         entries.removeAll { $0.id == id }
+        if mirrored { mirrorBackend?.mirrorLinksChanged() }
         scheduleSave()
+    }
+
+    // MARK: Account-calendar copies
+
+    /// Entries whose copy has not been written yet, or is behind after a failed write.
+    var pendingMirrorCount: Int { entries.filter { $0.mirror?.needsWrite == true }.count }
+
+    /// Identifiers of every copy ATFM wrote, so the imported-calendar overlay can skip them (no double rows).
+    var mirroredEventIDs: Set<String> {
+        var ids = Set<String>()
+        for entry in entries {
+            if let id = entry.mirror?.eventID { ids.insert(id) }
+            if let id = entry.mirror?.externalID { ids.insert(id) }
+        }
+        return ids
+    }
+
+    func retryPendingMirrors() {
+        guard let backend = mirrorBackend else { return }
+        var failures = 0
+        var lastError = ""
+        for index in entries.indices {
+            guard let link = entries[index].mirror, link.needsWrite else { continue }
+            do {
+                entries[index].mirror = try backend.writeMirror(MirrorEventSpec(entries[index]), link: link)
+            } catch {
+                failures += 1
+                lastError = error.localizedDescription
+            }
+        }
+        mirrorNotice = failures == 0 ? nil : "일정 \(failures)개를 아직 계정 캘린더에 못 올렸어요 · \(lastError)"
+        backend.mirrorLinksChanged()
+        scheduleSave()
+    }
+
+    func dismissMirrorNotice() { mirrorNotice = nil }
+
+    /// Brings the copy in line with `entry` (create / update / move / remove) and returns the entry with its refreshed link.
+    private func syncMirror(_ entry: DateEntry, previous: DateEntry?) -> DateEntry {
+        var result = entry
+        let old = previous?.mirror
+        guard let wanted = entry.mirror else {
+            if let old, old.isWritten { removeCopy(old, title: entry.title) }
+            return result
+        }
+        var link = CalendarMirror(calendarID: wanted.calendarID)
+        if let old {
+            if old.calendarID == wanted.calendarID {
+                link = old                                    // the stored ids are the truth, not whatever the editor carried
+            } else if old.isWritten {
+                removeCopy(old, title: entry.title)           // moved to another calendar: the old copy goes away
+            }
+        }
+        result.mirror = link
+        guard let backend = mirrorBackend else { return result }
+        // Nothing the copy shows has changed (colour, D-day flags, …): leave the event alone.
+        if !link.needsWrite, let previous, MirrorEventSpec(previous) == MirrorEventSpec(entry) { return result }
+        do {
+            result.mirror = try backend.writeMirror(MirrorEventSpec(entry), link: link)
+            // Clear the banner once no other entry is still waiting for its copy.
+            if !entries.contains(where: { $0.id != entry.id && $0.mirror?.needsWrite == true }) { mirrorNotice = nil }
+        } catch {
+            if link.isWritten { result.mirror?.stale = true }
+            let name = entry.title.isEmpty ? "일정" : "'\(entry.title)'"
+            mirrorNotice = "\(name)을(를) 계정 캘린더에 올리지 못했어요 · \(error.localizedDescription)"
+        }
+        return result
+    }
+
+    private func removeCopy(_ link: CalendarMirror, title: String) {
+        guard let backend = mirrorBackend else { return }
+        do {
+            try backend.removeMirror(link)
+        } catch {
+            let name = title.isEmpty ? "일정" : "'\(title)'"
+            mirrorNotice = "\(name)의 계정 캘린더 사본을 지우지 못했어요. 캘린더 앱에서 직접 지워 주세요 · \(error.localizedDescription)"
+        }
     }
 
     // MARK: Search

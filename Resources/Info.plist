@@ -27,9 +27,9 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>날짜 탭에서 캘린더 앱에 연결된 계정(학교 계정 등)의 일정을 보여주기 위해 필요합니다. 읽기만 하고 바꾸지 않습니다.</string>
+	<string>날짜 탭에서 캘린더 앱에 연결된 계정(학교·구글 계정 등)의 일정을 보여주고, "구글 캘린더에도 추가"를 켠 ATFM 일정을 그 계정 캘린더에 함께 넣기 위해 필요합니다. ATFM이 직접 넣은 일정만 고치거나 지우고, 다른 일정은 바꾸지 않습니다.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>날짜 탭에서 캘린더 앱의 일정을 보여주기 위해 필요합니다.</string>
+	<string>날짜 탭에서 캘린더 앱의 일정을 보여주고, 켠 경우 ATFM 일정을 계정 캘린더에 함께 넣기 위해 필요합니다.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

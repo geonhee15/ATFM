@@ -116,6 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mark("checklist + notes + storyboards")
         let dates = DateStore(directory: store.directory)
         self.dates = dates
+        // "구글 캘린더에도 추가": entries that ask for it get a copy in an account calendar through EventKit.
+        if ProcessInfo.processInfo.environment["ATFM_DEBUG_MIRROR_SAMPLE"] == "1" { externalCalendar.enableMirrorSample() }
+        dates.mirrorBackend = externalCalendar
+        externalCalendar.mirroredEventIDs = { [weak dates] in dates?.mirroredEventIDs ?? [] }
         let holidays = HolidayStore(directory: store.directory)
         self.holidays = holidays
         mark("dates + holidays")

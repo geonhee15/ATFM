@@ -246,6 +246,76 @@ enum Probe {
                 print("holiday probe: 2026-09 kr entries: \(sept.map { "\(Calendar.current.component(.day, from: $0.date)) \($0.title) \($0.isPublic)" })")
             }
         }
+        if ProcessInfo.processInfo.environment["ATFM_PROBE_MIRROR"] == "1" {   // "구글 캘린더에도 추가" sync logic against an in-memory backend (no EventKit)
+            MainActor.assumeIsolated {
+                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("atfm-mirror-probe-\(UUID().uuidString)")
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                defer { try? FileManager.default.removeItem(at: dir) }
+                // An old file without the `mirror` key must still load.
+                let legacy = #"[{"id":"\#(UUID().uuidString)","title":"옛 일정","year":2026,"month":11,"day":20,"note":"","colorIndex":0,"showsInCalendar":true,"showsInDday":false,"repeatRule":"none","createdAt":"2026-09-01T00:00:00Z"}]"#
+                try? legacy.write(to: dir.appendingPathComponent("dates.json"), atomically: true, encoding: .utf8)
+                let store = DateStore(directory: dir)
+                let backend = SampleMirrorBackend()
+                store.mirrorBackend = backend
+                print("mirror probe: legacy entries loaded=\(store.entries.count) mirror=\(String(describing: store.entries.first?.mirror))")
+                var mark = 0
+                @MainActor func step(_ name: String) {
+                    let fresh = backend.log[mark...].joined(separator: " | ")
+                    mark = backend.log.count
+                    print("mirror probe: \(name) → \(fresh.isEmpty ? "(no write)" : fresh) · pending=\(store.pendingMirrorCount) notice=\(store.mirrorNotice ?? "-")")
+                }
+                @MainActor func current(_ id: UUID) -> DateEntry { store.entries.first { $0.id == id }! }
+                let google = "sample-google-personal", icloud = "sample-icloud-home"
+
+                var meeting = DateEntry(title: "팀 회의", year: 2026, month: 11, day: 20, hour: 15, minute: 0, mirror: CalendarMirror(calendarID: google))
+                store.add(meeting); step("add mirrored")
+                meeting = current(meeting.id); meeting.colorIndex = 3; meeting.showsInDday = true
+                store.update(meeting); step("colour + D-day flag only")
+                meeting = current(meeting.id); meeting.title = "팀 회의 (변경)"
+                store.update(meeting); step("rename")
+                meeting = current(meeting.id); meeting.repeatRule = .monthly
+                store.update(meeting); step("repeat monthly")
+                var copy = current(meeting.id); copy.id = UUID(); copy.title += " 사본"
+                store.add(copy); step("duplicate")
+                print("mirror probe: duplicate has its own event=\(current(copy.id).mirror?.eventID != current(meeting.id).mirror?.eventID)")
+                meeting = current(meeting.id); meeting.mirror = CalendarMirror(calendarID: icloud)
+                store.update(meeting); step("move to another calendar")
+                meeting = current(meeting.id); meeting.mirror = nil
+                store.update(meeting); step("option off")
+                backend.failNextWrites = 1
+                var trip = DateEntry(title: "제주 여행", year: 2026, month: 12, day: 21, mirror: CalendarMirror(calendarID: google))
+                trip.setEnd(Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 25)))
+                store.add(trip); step("add while the write fails")
+                store.retryPendingMirrors(); step("retry")
+                backend.failNextWrites = 1
+                trip = current(trip.id); trip.title = "제주 여행 (연장)"
+                store.update(trip); step("update while the write fails")
+                print("mirror probe: stale=\(current(trip.id).mirror?.stale == true) keeps id=\(current(trip.id).mirror?.eventID ?? "nil")")
+                store.retryPendingMirrors(); step("retry")
+                store.delete(trip.id); step("delete mirrored")
+                store.delete(copy.id); step("delete duplicate")
+                print("mirror probe: events left in backend=\(backend.events.count) hidden ids=\(store.mirroredEventIDs.count)")
+                // Persistence round trip keeps the link.
+                var kept = DateEntry(title: "치과", year: 2026, month: 11, day: 25, hour: 10, minute: 30, mirror: CalendarMirror(calendarID: google))
+                store.add(kept); kept = current(kept.id); store.flush()
+                let reloaded = DateStore(directory: dir)
+                print("mirror probe: reload keeps link=\(reloaded.entries.first { $0.id == kept.id }?.mirror == kept.mirror)")
+
+                // Entry → event mapping.
+                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"; f.locale = Locale(identifier: "en_US_POSIX")
+                func show(_ name: String, _ entry: DateEntry) {
+                    let spec = MirrorEventSpec(entry)
+                    print("mirror probe: spec \(name): allDay=\(spec.isAllDay) \(f.string(from: spec.start)) → \(f.string(from: spec.end)) repeat=\(spec.recurrence.rawValue) notes=\(spec.notes ?? "nil")")
+                }
+                show("all-day", DateEntry(title: "a", year: 2026, month: 11, day: 20))
+                show("timed", DateEntry(title: "b", year: 2026, month: 11, day: 20, hour: 15, minute: 30, note: "회의실 B"))
+                var span = DateEntry(title: "c", year: 2026, month: 12, day: 21); span.setEnd(Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 25)))
+                show("all-day span", span)
+                span.hour = 9; span.minute = 0
+                show("timed span", span)
+                show("yearly", DateEntry(title: "d", year: 2024, month: 3, day: 14, repeatRule: .yearly))
+            }
+        }
         if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_CALC"] {   // "expr;expr;…"
             for expr in spec.split(separator: ";").map(String.init) {
                 var engine = CalcEngine(degrees: true, ans: 42)

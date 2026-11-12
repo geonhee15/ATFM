@@ -359,6 +359,17 @@ final class BubblePanelController {
 
     /// Captures this panel's own window into a PNG (no screen-recording permission needed for own windows).
     func writeSnapshot(to path: String) {
+        // ATFM_SNAPSHOT_OFFSCREEN=1: draw the view tree itself instead of asking the window server, which
+        // returns a blank image while the screen is locked. Materials come out flat, layout and text are exact.
+        if ProcessInfo.processInfo.environment["ATFM_SNAPSHOT_OFFSCREEN"] == "1", let view = panel.contentView,
+           let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: rep)
+            if let data = rep.representation(using: .png, properties: [:]) {
+                try? data.write(to: URL(fileURLWithPath: path))
+                NSLog("ATFM: offscreen snapshot written to \(path)")
+            }
+            return
+        }
         let windowID = CGWindowID(panel.windowNumber)
         guard let image = CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, [.boundsIgnoreFraming, .bestResolution]) else {
             NSLog("ATFM: snapshot failed")
