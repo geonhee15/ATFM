@@ -314,6 +314,73 @@ enum Probe {
                 span.hour = 9; span.minute = 0
                 show("timed span", span)
                 show("yearly", DateEntry(title: "d", year: 2024, month: 3, day: 14, repeatRule: .yearly))
+                // End times ("언제부터 언제까지").
+                let ranged = DateEntry(title: "e", year: 2026, month: 11, day: 20, hour: 15, minute: 0, endHour: 16, endMinute: 30)
+                show("time range", ranged)
+                let overnight = DateEntry(title: "f", year: 2026, month: 11, day: 20, hour: 23, minute: 0, endHour: 1, endMinute: 0)
+                show("overnight", overnight)
+                span.endHour = 18; span.endMinute = 0
+                show("span with end time", span)
+                show("end time without start", DateEntry(title: "g", year: 2026, month: 11, day: 20, endHour: 16, endMinute: 30))
+                let day21 = Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 21))!
+                let day23 = Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 23))!
+                let day25 = Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 25))!
+                print("mirror probe: labels range=\(ranged.timeText ?? "nil") overnight=\(overnight.timeText ?? "nil") nextDay=\(overnight.endsNextDay)/\(ranged.endsNextDay)"
+                      + " span first=\(span.timeText(on: day21) ?? "종일") middle=\(span.timeText(on: day23) ?? "종일") last=\(span.timeText(on: day25) ?? "종일")")
+                span.endHour = nil; span.endMinute = nil
+                print("mirror probe: labels span without end: first=\(span.timeText(on: day21) ?? "종일") last=\(span.timeText(on: day25) ?? "종일")")
+                // Round trip of the new keys, and an end-time change reaching the copy.
+                var lecture = DateEntry(title: "특강", year: 2026, month: 11, day: 27, hour: 13, minute: 0, endHour: 14, endMinute: 0, mirror: CalendarMirror(calendarID: google))
+                store.add(lecture); step("add with time range")
+                lecture = current(lecture.id); lecture.endMinute = 30
+                store.update(lecture); step("end time changed")
+                store.flush()
+                let again = DateStore(directory: dir).entries.first { $0.id == lecture.id }
+                print("mirror probe: reload keeps end time=\(again?.endHour == 14 && again?.endMinute == 30)")
+
+                // "모두 올리기": every entry without a copy, D-day-only ones opt-in.
+                let bulkDir = dir.appendingPathComponent("bulk")
+                try? FileManager.default.createDirectory(at: bulkDir, withIntermediateDirectories: true)
+                let bulk = DateStore(directory: bulkDir)
+                let bulkBackend = SampleMirrorBackend()
+                bulk.mirrorBackend = bulkBackend
+                bulk.add(DateEntry(title: "이미 올라간 일정", year: 2026, month: 11, day: 1, mirror: CalendarMirror(calendarID: google)))
+                bulk.add(DateEntry(title: "지난 일정", year: 2025, month: 3, day: 2))
+                bulk.add(DateEntry(title: "회의", year: 2026, month: 11, day: 20, hour: 15, minute: 0, endHour: 16, endMinute: 0))
+                bulk.add(DateEntry(title: "월세", year: 2026, month: 1, day: 25, repeatRule: .monthly))
+                bulk.add(DateEntry(title: "사귄 날", year: 2024, month: 3, day: 14, showsInCalendar: false, showsInDday: true, repeatRule: .yearly))
+                var bulkMark = bulkBackend.log.count
+                @MainActor func bulkStep(_ name: String) {
+                    let fresh = bulkBackend.log[bulkMark...].joined(separator: " | ")
+                    bulkMark = bulkBackend.log.count
+                    let linked = bulk.entries.filter { $0.mirror != nil }.count
+                    print("mirror probe: bulk \(name) → \(fresh.isEmpty ? "(no write)" : fresh) · linked=\(linked)/\(bulk.entries.count) pending=\(bulk.pendingMirrorCount) events=\(bulkBackend.events.count) notice=\(bulk.mirrorNotice ?? "-")")
+                }
+                print("mirror probe: bulk candidates calendar=\(bulk.entriesWithoutMirror(includingDdayOnly: false).count) withDday=\(bulk.entriesWithoutMirror(includingDdayOnly: true).count)")
+                var outcome = bulk.mirrorAll(to: google, includingDdayOnly: false)
+                bulkStep("upload (calendar entries) written=\(outcome.written) failed=\(outcome.failed)")
+                outcome = bulk.mirrorAll(to: google, includingDdayOnly: false)
+                bulkStep("upload again written=\(outcome.written)")
+                outcome = bulk.mirrorAll(to: icloud, includingDdayOnly: true)
+                bulkStep("upload with D-day-only written=\(outcome.written)")
+                print("mirror probe: bulk undo unlinked=\(bulk.undoLastBulkMirror())"); bulkStep("undo (only the last batch)")
+                // One write fails in the middle: that entry stays pending, the rest go through, 되돌리기 takes all of them back.
+                for entry in bulk.entries where entry.title != "이미 올라간 일정" { var e = entry; e.mirror = nil; bulk.update(e) }
+                bulkStep("unlink by hand")
+                bulkBackend.failNextWrites = 1
+                outcome = bulk.mirrorAll(to: google, includingDdayOnly: true)
+                bulkStep("upload, first write fails written=\(outcome.written) failed=\(outcome.failed)")
+                bulk.retryPendingMirrors(); bulkStep("retry")
+                print("mirror probe: bulk undo unlinked=\(bulk.undoLastBulkMirror())"); bulkStep("undo")
+                // No backend calendar / no access: the batch stops at once and links nothing.
+                final class Refusing: CalendarMirrorBackend {
+                    func writeMirror(_ spec: MirrorEventSpec, link: CalendarMirror) throws -> CalendarMirror { throw MirrorError.noAccess }
+                    func removeMirror(_ link: CalendarMirror) throws {}
+                    func mirrorLinksChanged() {}
+                }
+                bulk.mirrorBackend = Refusing()
+                outcome = bulk.mirrorAll(to: google, includingDdayOnly: true)
+                print("mirror probe: bulk without access → written=\(outcome.written) failed=\(outcome.failed) stoppedBy=\(outcome.stoppedBy ?? "-") linked=\(bulk.entries.filter { $0.mirror != nil }.count) undoable=\(bulk.lastBulkMirror?.entryIDs.count ?? -1) notice=\(bulk.mirrorNotice ?? "-")")
             }
         }
         if let spec = ProcessInfo.processInfo.environment["ATFM_PROBE_CALC"] {   // "expr;expr;…"

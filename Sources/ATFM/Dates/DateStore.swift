@@ -33,6 +33,10 @@ struct DateEntry: Identifiable, Codable, Equatable {
     var endYear: Int? = nil
     var endMonth: Int? = nil
     var endDay: Int? = nil
+    /// Optional end time ("15:00–16:30"); only used together with a start time. Optional so old files still decode.
+    /// Single day: that same day, or the next morning when it is not after the start (23:00–01:00). Span: on the last day.
+    var endHour: Int? = nil
+    var endMinute: Int? = nil
     /// Which number the D-day row shows big (nil = countdown). Optional so old files still decode.
     var ddayStyle: DDayStyle? = nil
     /// "처음부터 D+": count the start day itself as day 1 (couple-app style).
@@ -74,6 +78,14 @@ struct DateEntry: Identifiable, Codable, Equatable {
 
     var hasTime: Bool { hour != nil }
 
+    var hasEndTime: Bool { hour != nil && minute != nil && endHour != nil && endMinute != nil }
+
+    /// A single-day entry whose end time is not after its start runs into the next morning.
+    var endsNextDay: Bool {
+        guard !isMultiDay, let hour, let minute, let endHour, let endMinute else { return false }
+        return (endHour, endMinute) <= (hour, minute)
+    }
+
     /// Inclusive end date; equals `date` for single-day entries.
     var endDate: Date {
         guard let endYear, let endMonth, let endDay,
@@ -98,9 +110,23 @@ struct DateEntry: Identifiable, Codable, Equatable {
         return "\(f.string(from: date))–\(f.string(from: endDate)) · \(spanDays)일간"
     }
 
+    private static func clock(_ hour: Int, _ minute: Int) -> String { String(format: "%02d:%02d", hour, minute) }
+
+    /// "15:00", or "15:00–16:30" with an end time.
     var timeText: String? {
         guard let hour, let minute else { return nil }
-        return String(format: "%02d:%02d", hour, minute)
+        guard let endHour, let endMinute else { return Self.clock(hour, minute) }
+        return "\(Self.clock(hour, minute))–\(Self.clock(endHour, endMinute))"
+    }
+
+    /// What the row of one day shows. A span starts on its first day ("09:00~"), ends on its last
+    /// ("~18:00") and takes the whole day in between (nil = 종일).
+    func timeText(on day: Date, calendar: Calendar = .current) -> String? {
+        guard let hour, let minute else { return nil }
+        guard isMultiDay else { return timeText }
+        if isSpanStart(day, calendar: calendar) { return "\(Self.clock(hour, minute))~" }
+        if isSpanEnd(day, calendar: calendar), let endHour, let endMinute { return "~\(Self.clock(endHour, endMinute))" }
+        return nil
     }
 
     /// Does this entry land on `day` (a start-of-day Date), honoring repeats?
@@ -169,6 +195,18 @@ final class DateStore {
     @ObservationIgnored var mirrorBackend: CalendarMirrorBackend?
     /// Last thing that went wrong with a copy; the 날짜 tab shows it as a banner.
     private(set) var mirrorNotice: String?
+    /// What the last "모두 올리기" did, so the 날짜 tab can report it and offer 되돌리기. Not saved: gone after a restart.
+    private(set) var lastBulkMirror: BulkMirror?
+
+    struct BulkMirror: Equatable {
+        var calendarID: String
+        /// Entries it linked: written, or still waiting after a failed write.
+        var entryIDs: [UUID] = []
+        var written = 0
+        var failed = 0
+        /// The whole batch stopped here (no calendar access, calendar gone).
+        var stoppedBy: String? = nil
+    }
 
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -242,6 +280,70 @@ final class DateStore {
 
     func dismissMirrorNotice() { mirrorNotice = nil }
 
+    /// Entries that live only in ATFM — what "모두 올리기" adds. D-day-only entries (not on the calendar) are opt-in.
+    func entriesWithoutMirror(includingDdayOnly: Bool) -> [DateEntry] {
+        entries.filter { $0.mirror == nil && ($0.showsInCalendar || includingDdayOnly) }
+    }
+
+    /// "모두 올리기": gives every entry that has no copy yet one in `calendarID`. Entries that already have a copy are left alone.
+    @discardableResult
+    func mirrorAll(to calendarID: String, includingDdayOnly: Bool) -> BulkMirror {
+        var result = BulkMirror(calendarID: calendarID)
+        guard let backend = mirrorBackend, !calendarID.isEmpty else { return result }
+        var lastError = ""
+        for index in entries.indices where entries[index].mirror == nil && (entries[index].showsInCalendar || includingDdayOnly) {
+            let link = CalendarMirror(calendarID: calendarID)
+            do {
+                entries[index].mirror = try backend.writeMirror(MirrorEventSpec(entries[index]), link: link)
+                result.written += 1
+                result.entryIDs.append(entries[index].id)
+            } catch let error as MirrorError where error.stopsBatch {
+                result.stoppedBy = error.localizedDescription       // every other entry would fail the same way
+                break
+            } catch {
+                entries[index].mirror = link                         // stays pending: the banner offers 다시 시도
+                result.failed += 1
+                result.entryIDs.append(entries[index].id)
+                lastError = error.localizedDescription
+            }
+        }
+        if let reason = result.stoppedBy {
+            mirrorNotice = "일정을 계정 캘린더에 올리지 못했어요 · \(reason)"
+        } else if result.failed > 0 {
+            mirrorNotice = "일정 \(result.failed)개를 아직 계정 캘린더에 못 올렸어요 · \(lastError)"
+        }
+        lastBulkMirror = result
+        if !result.entryIDs.isEmpty {
+            backend.mirrorLinksChanged()
+            scheduleSave()
+        }
+        return result
+    }
+
+    /// 되돌리기: removes the copies the last "모두 올리기" made and unlinks those entries. Returns how many were unlinked.
+    @discardableResult
+    func undoLastBulkMirror() -> Int {
+        guard let last = lastBulkMirror else { return 0 }
+        lastBulkMirror = nil
+        var unlinked = 0
+        var allRemoved = true
+        for id in last.entryIDs {
+            // Entries the user has since deleted or unlinked by hand are simply skipped.
+            guard let index = entries.firstIndex(where: { $0.id == id }), let link = entries[index].mirror else { continue }
+            if link.isWritten, !removeCopy(link, title: entries[index].title) { allRemoved = false }
+            entries[index].mirror = nil
+            unlinked += 1
+        }
+        if allRemoved, pendingMirrorCount == 0 { mirrorNotice = nil }
+        if unlinked > 0 {
+            mirrorBackend?.mirrorLinksChanged()
+            scheduleSave()
+        }
+        return unlinked
+    }
+
+    func dismissBulkMirrorReport() { lastBulkMirror = nil }
+
     /// Brings the copy in line with `entry` (create / update / move / remove) and returns the entry with its refreshed link.
     private func syncMirror(_ entry: DateEntry, previous: DateEntry?) -> DateEntry {
         var result = entry
@@ -274,13 +376,16 @@ final class DateStore {
         return result
     }
 
-    private func removeCopy(_ link: CalendarMirror, title: String) {
-        guard let backend = mirrorBackend else { return }
+    @discardableResult
+    private func removeCopy(_ link: CalendarMirror, title: String) -> Bool {
+        guard let backend = mirrorBackend else { return false }
         do {
             try backend.removeMirror(link)
+            return true
         } catch {
             let name = title.isEmpty ? "일정" : "'\(title)'"
             mirrorNotice = "\(name)의 계정 캘린더 사본을 지우지 못했어요. 캘린더 앱에서 직접 지워 주세요 · \(error.localizedDescription)"
+            return false
         }
     }
 

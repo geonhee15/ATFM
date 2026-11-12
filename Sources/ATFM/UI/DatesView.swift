@@ -8,15 +8,20 @@ struct DatesView: View {
     @State private var editing: DateEntry?
     @State private var showEditor = false
     @State private var query = ""
+    @State private var showBulk = false
+    @State private var bulkCalendarID = ""
+    @State private var bulkIncludesDday = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 header
-                if ProcessInfo.processInfo.environment["ATFM_DEBUG_DATES_EDITOR"] == "1" {   // snapshot the editor inline
-                    EntryEditor(entry: DateEntry(title: "제주 여행", year: 2026, month: 9, day: 21, colorIndex: 3, showsInDday: true,
-                                                 mirror: external.sample == nil ? nil : CalendarMirror(calendarID: "sample-google-personal")),
-                                isNew: true, external: external) { _ in }
+                if let mode = ProcessInfo.processInfo.environment["ATFM_DEBUG_DATES_EDITOR"], !mode.isEmpty {   // snapshot the editor inline
+                    let link = external.sample == nil ? nil : CalendarMirror(calendarID: "sample-google-personal")
+                    let sample = mode == "time"   // "time": an event with a time range
+                        ? DateEntry(title: "팀 회의", year: 2026, month: 9, day: 21, hour: 15, minute: 0, endHour: 16, endMinute: 30, mirror: link)
+                        : DateEntry(title: "제주 여행", year: 2026, month: 9, day: 21, colorIndex: 3, showsInDday: true, mirror: link)
+                    EntryEditor(entry: sample, isNew: true, external: external) { _ in }
                         .card()
                 }
                 mirrorBanner
@@ -30,6 +35,7 @@ struct DatesView: View {
                 ddayCard
                 holidayCard
                 schoolCard
+                mirrorCard
             }
             .padding(.bottom, 6)
         }
@@ -37,6 +43,10 @@ struct DatesView: View {
         .onAppear {
             external.refresh(around: store.visibleMonth)
             if let q = UserDefaults.standard.string(forKey: "debugDatesSearch"), !q.isEmpty { query = q }
+            if let mode = ProcessInfo.processInfo.environment["ATFM_DEBUG_DATES_BULK"], !mode.isEmpty {   // snapshot "모두 올리기" ("run": after it ran)
+                beginBulk()
+                if mode == "run" { runBulk() }
+            }
         }
         .onChange(of: store.visibleMonth) { _, month in external.refresh(around: month) }
         .popover(isPresented: $showEditor, arrowEdge: .top) {
@@ -279,7 +289,7 @@ struct DatesView: View {
                     .foregroundStyle(.tertiary)
             } else {
                 ForEach(events) { event in
-                    EventRow(entry: event) { begin(edit: event) }
+                    EventRow(entry: event, day: store.selectedDay) { begin(edit: event) }
                         .contextMenu { contextMenu(for: event) }
                 }
                 ForEach(schoolEvents) { event in
@@ -507,6 +517,153 @@ struct DatesView: View {
         if !external.isEnabled { return "이 Mac의 캘린더 앱에 연결된 계정(학교 구글 계정 등)의 일정을 달력에 함께 보여줘요." }
         let count = external.events.count
         return count == 0 ? "이번 달 가져온 일정이 없어요. 아래에서 캘린더를 골라 보세요." : "이번 달 \(count)개 일정을 가져왔어요 (읽기 전용 · 링 모양 점)."
+    }
+
+    // MARK: 구글 캘린더에 한꺼번에 올리기
+
+    private var mirrorCard: some View {
+        let waiting = store.entriesWithoutMirror(includingDdayOnly: false).count
+        let ddayOnly = store.entriesWithoutMirror(includingDdayOnly: true).count - waiting
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("구글 캘린더에 올리기")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(mirrorSubtitle(waiting: waiting, ddayOnly: ddayOnly))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            if showBulk {
+                bulkPanel(waiting: waiting, ddayOnly: ddayOnly)
+                    .padding(.leading, 40)
+            } else {
+                if let last = store.lastBulkMirror {
+                    bulkReport(last)
+                        .padding(.leading, 40)
+                }
+                if waiting + ddayOnly > 0 {
+                    Button("모두 올리기…") { beginBulk() }
+                        .controlSize(.small)
+                        .padding(.leading, 40)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .card()
+        .onChange(of: external.writableCalendars) { _, _ in
+            // Access was just granted: pick the calendar that could not be chosen before.
+            if showBulk, bulkCalendarID.isEmpty, let id = external.defaultMirrorCalendarID { bulkCalendarID = id }
+        }
+    }
+
+    private func mirrorSubtitle(waiting: Int, ddayOnly: Int) -> String {
+        let mirrored = store.entries.filter { $0.mirror != nil }.count
+        if waiting + ddayOnly == 0 {
+            return mirrored == 0 ? "ATFM에만 있는 일정을 한꺼번에 구글(계정) 캘린더에도 추가해요. 지금은 올릴 일정이 없어요."
+                                 : "일정 \(mirrored)개가 모두 구글(계정) 캘린더에도 있어요."
+        }
+        var parts: [String] = []
+        if waiting > 0 { parts.append("일정 \(waiting)개") }
+        if ddayOnly > 0 { parts.append("D-day 기념일 \(ddayOnly)개") }
+        let text = "ATFM에만 있는 \(parts.joined(separator: " · "))를 한꺼번에 구글(계정) 캘린더에도 추가할 수 있어요."
+        return mirrored == 0 ? text : text + " 이미 올라간 일정은 \(mirrored)개예요."
+    }
+
+    private func bulkPanel(waiting: Int, ddayOnly: Int) -> some View {
+        let count = waiting + (bulkIncludesDday ? ddayOnly : 0)
+        let ready = external.mirrorState == .ready
+        return VStack(alignment: .leading, spacing: 6) {
+            if ready {
+                Picker("올릴 캘린더", selection: $bulkCalendarID) {
+                    if external.calendarInfo(bulkCalendarID) == nil {
+                        Text("캘린더 고르기").tag(bulkCalendarID)
+                    }
+                    ForEach(external.groupedWritableCalendars, id: \.account) { group in
+                        Section(group.account) {
+                            ForEach(group.calendars) { calendar in
+                                Text(calendar.title).tag(calendar.id)
+                            }
+                        }
+                    }
+                }
+                if ddayOnly > 0 {
+                    Toggle("D-day에만 있는 기념일 \(ddayOnly)개도 올리기", isOn: $bulkIncludesDday)
+                        .toggleStyle(.checkbox)
+                }
+                Text("아직 안 올라간 일정 \(count)개를 이 캘린더에 추가해요 (지난 일정 · 반복 일정 포함). 이미 올라간 일정은 그대로 둬요.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                MirrorSetupHelp(state: external.mirrorState, external: external)
+            }
+            HStack {
+                Spacer()
+                Button("취소") { showBulk = false }
+                if ready {
+                    Button("\(count)개 올리기") { runBulk() }
+                        .disabled(count == 0 || external.calendarInfo(bulkCalendarID) == nil)
+                }
+            }
+        }
+        .controlSize(.small)
+    }
+
+    /// What the last "모두 올리기" did, with 되돌리기.
+    private func bulkReport(_ last: DateStore.BulkMirror) -> some View {
+        let name = external.calendarInfo(last.calendarID)?.title ?? "계정"
+        var text: String
+        if last.written == 0 {
+            if let reason = last.stoppedBy { text = "올리지 못했어요 · \(reason)" }
+            else if last.failed > 0 { text = "일정 \(last.failed)개를 올리지 못했어요. 탭 맨 위 안내에서 다시 시도할 수 있어요." }
+            else { text = "올릴 일정이 없었어요." }
+        } else {
+            text = "일정 \(last.written)개를 '\(name)' 캘린더에 올렸어요."
+            if last.failed > 0 { text += " \(last.failed)개는 실패했어요 (탭 맨 위 안내에서 다시 시도)." }
+            if let reason = last.stoppedBy { text += " 도중에 멈췄어요 · \(reason)" }
+        }
+        let clean = last.written > 0 && last.failed == 0 && last.stoppedBy == nil
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: clean ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(clean ? Color.green : Color.orange)
+            Text(text)
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            if !last.entryIDs.isEmpty {
+                Button("되돌리기") { store.undoLastBulkMirror() }
+                    .controlSize(.mini)
+                    .help("방금 올린 사본을 계정 캘린더에서 지우고 ATFM 전용으로 되돌려요")
+            }
+            Button { store.dismissBulkMirrorReport() } label: {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("닫기")
+        }
+    }
+
+    private func beginBulk() {
+        external.prepareMirroring()     // loads the calendar list; asks for calendar access the first time
+        bulkCalendarID = external.defaultMirrorCalendarID ?? ""
+        bulkIncludesDday = store.entriesWithoutMirror(includingDdayOnly: false).isEmpty
+        showBulk = true
+    }
+
+    private func runBulk() {
+        let result = store.mirrorAll(to: bulkCalendarID, includingDdayOnly: bulkIncludesDday)
+        if result.written > 0 { external.mirrorCalendarID = bulkCalendarID }
+        showBulk = false
     }
 
     // MARK: Context menu (우클릭)
@@ -750,6 +907,8 @@ private struct SpanBar: View {
 
 private struct EventRow: View {
     let entry: DateEntry
+    /// The day this row is listed under (a span shows a different time on its first and last day).
+    let day: Date
     let edit: () -> Void
     @State private var hovering = false
     @Environment(\.colorScheme) private var scheme
@@ -780,7 +939,7 @@ private struct EventRow: View {
                     .foregroundStyle(mirror.needsWrite ? Color.orange : Color.secondary)
                     .help(mirror.needsWrite ? "계정 캘린더에 아직 못 올렸어요" : "구글(계정) 캘린더에도 있는 일정")
             }
-            Text(entry.timeText ?? "종일")
+            Text(entry.timeText(on: day) ?? "종일")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
         }
@@ -868,6 +1027,37 @@ private struct DDayRow: View {
     }
 }
 
+/// What is still missing before a copy can be written (no calendar access, no account), with the button that fixes it.
+private struct MirrorSetupHelp: View {
+    let state: ExternalCalendarSource.MirrorState
+    let external: ExternalCalendarSource
+
+    var body: some View {
+        switch state {
+        case .ready:
+            EmptyView()
+        case .denied:
+            row("캘린더 접근이 꺼져 있어요.", tone: .red, button: "설정 열기") { external.openPrivacySettings() }
+        case .needsPermission:
+            row("캘린더 접근 권한이 필요해요.", tone: .secondary, button: "권한 요청") { external.requestAccess() }
+        case .noCalendars:
+            row("쓸 수 있는 계정 캘린더가 없어요. 시스템 설정 › 인터넷 계정에서 Google 계정을 추가하고 '캘린더'를 켜 주세요.",
+                tone: .secondary, button: "인터넷 계정 열기") { external.openInternetAccounts() }
+        }
+    }
+
+    private func row(_ text: String, tone: Color, button: String, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(text)
+                .font(.system(size: 10))
+                .foregroundStyle(tone)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(button, action: action)
+                .controlSize(.mini)
+        }
+    }
+}
+
 // MARK: - Editor
 
 private struct EntryEditor: View {
@@ -882,6 +1072,8 @@ private struct EntryEditor: View {
 
     @State private var date: Date
     @State private var time: Date
+    @State private var endTime: Date
+    @State private var hasEndTime: Bool
     @State private var endDate: Date
     @State private var hasEnd: Bool
     @FocusState private var titleFocused: Bool
@@ -897,6 +1089,9 @@ private struct EntryEditor: View {
         _hasEnd = State(initialValue: entry.isMultiDay)
         var t = DateComponents(); t.hour = entry.hour ?? 9; t.minute = entry.minute ?? 0
         _time = State(initialValue: Calendar.current.date(from: t) ?? Date())
+        var e = DateComponents(); e.hour = entry.endHour ?? ((entry.hour ?? 9) + 1) % 24; e.minute = entry.endMinute ?? entry.minute ?? 0
+        _endTime = State(initialValue: Calendar.current.date(from: e) ?? Date())
+        _hasEndTime = State(initialValue: entry.hasEndTime)
     }
 
     var body: some View {
@@ -921,9 +1116,30 @@ private struct EntryEditor: View {
                 else { entry.hour = nil; entry.minute = nil }
             }))
             if entry.hasTime {
-                DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
+                HStack(spacing: 6) {
+                    DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                    if hasEndTime {
+                        Text("부터").font(.system(size: 11)).foregroundStyle(.secondary)
+                        DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.compact)
+                            .labelsHidden()
+                        Text("까지").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Toggle("끝나는 시간 (몇 시부터 몇 시까지)", isOn: Binding(get: { hasEndTime }, set: { on in
+                    // Turning it on starts from one hour after the start time.
+                    if on { endTime = Calendar.current.date(byAdding: .hour, value: 1, to: time) ?? time }
+                    hasEndTime = on
+                }))
+                if hasEndTime {
+                    Text(endTimeHint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             TextField("메모 (선택)", text: $entry.note)
                 .textFieldStyle(.roundedBorder)
@@ -1002,15 +1218,9 @@ private struct EntryEditor: View {
             }
         }))
         if let mirror = entry.mirror {
-            switch external.mirrorState {
-            case .denied:
-                mirrorHelp("캘린더 접근이 꺼져 있어요.", tone: .red, button: "설정 열기") { external.openPrivacySettings() }
-            case .needsPermission:
-                mirrorHelp("캘린더 접근 권한이 필요해요.", tone: .secondary, button: "권한 요청") { external.requestAccess() }
-            case .noCalendars:
-                mirrorHelp("쓸 수 있는 계정 캘린더가 없어요. 시스템 설정 › 인터넷 계정에서 Google 계정을 추가하고 '캘린더'를 켜 주세요.",
-                           tone: .secondary, button: "인터넷 계정 열기") { external.openInternetAccounts() }
-            case .ready:
+            if external.mirrorState != .ready {
+                MirrorSetupHelp(state: external.mirrorState, external: external)
+            } else {
                 Picker("캘린더", selection: Binding(get: { entry.mirror?.calendarID ?? "" },
                                                  set: { entry.mirror = CalendarMirror(calendarID: $0) })) {
                     if external.calendarInfo(mirror.calendarID) == nil {
@@ -1038,20 +1248,32 @@ private struct EntryEditor: View {
         }
     }
 
-    private func mirrorHelp(_ text: String, tone: Color, button: String, action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(text)
-                .font(.system(size: 10))
-                .foregroundStyle(tone)
-                .fixedSize(horizontal: false, vertical: true)
-            Button(button, action: action)
-                .controlSize(.mini)
-        }
-    }
-
     private var spanDaysPreview: Int {
         let a = Calendar.current.startOfDay(for: date), b = Calendar.current.startOfDay(for: endDate)
         return max(1, (Calendar.current.dateComponents([.day], from: a, to: b).day ?? 0) + 1)
+    }
+
+    /// Spells out what the two times mean: how long, "다음 날" when the end is not after the start, or both days of a span.
+    private var endTimeHint: String {
+        let calendar = Calendar.current
+        let s = calendar.dateComponents([.hour, .minute], from: time), e = calendar.dateComponents([.hour, .minute], from: endTime)
+        let startMinutes = (s.hour ?? 0) * 60 + (s.minute ?? 0), endMinutes = (e.hour ?? 0) * 60 + (e.minute ?? 0)
+        let startClock = String(format: "%02d:%02d", s.hour ?? 0, s.minute ?? 0)
+        let endClock = String(format: "%02d:%02d", e.hour ?? 0, e.minute ?? 0)
+        if hasEnd, spanDaysPreview > 1 {
+            let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR"); f.dateFormat = "M/d"
+            return "\(f.string(from: date)) \(startClock)부터 \(f.string(from: endDate)) \(endClock)까지"
+        }
+        if endMinutes <= startMinutes {
+            return "다음 날 \(endClock)까지 · \(Self.durationText(endMinutes + 24 * 60 - startMinutes))"
+        }
+        return Self.durationText(endMinutes - startMinutes)
+    }
+
+    private static func durationText(_ minutes: Int) -> String {
+        let hours = minutes / 60, rest = minutes % 60
+        if hours == 0 { return "\(rest)분" }
+        return rest == 0 ? "\(hours)시간" : "\(hours)시간 \(rest)분"
     }
 
     private var repeatHint: String {
@@ -1070,6 +1292,13 @@ private struct EntryEditor: View {
         if entry.hasTime {
             entry.hour = Calendar.current.component(.hour, from: time)
             entry.minute = Calendar.current.component(.minute, from: time)
+        }
+        if entry.hasTime, hasEndTime {
+            entry.endHour = Calendar.current.component(.hour, from: endTime)
+            entry.endMinute = Calendar.current.component(.minute, from: endTime)
+        } else {
+            entry.endHour = nil
+            entry.endMinute = nil
         }
         entry.setEnd(hasEnd ? endDate : nil)
         if entry.title.trimmingCharacters(in: .whitespaces).isEmpty { entry.title = entry.showsInDday ? "기념일" : "일정" }

@@ -34,10 +34,15 @@ struct MirrorEventSpec: Equatable {
         let firstDay = entry.date
         let lastDay = entry.endDate
         if let hour = entry.hour, let minute = entry.minute {
-            // ATFM only knows a start time: a single day gets one hour, a span runs to the end of its last day.
             isAllDay = false
             start = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: firstDay) ?? firstDay
-            if entry.isMultiDay {
+            if let endHour = entry.endHour, let endMinute = entry.endMinute,
+               var finish = calendar.date(bySettingHour: endHour, minute: endMinute, second: 0, of: lastDay) {
+                // The end time sits on the last day; "23:00–01:00" on a single day runs into the next morning.
+                if finish <= start { finish = calendar.date(byAdding: .day, value: 1, to: finish) ?? start.addingTimeInterval(3600) }
+                end = finish
+            } else if entry.isMultiDay {
+                // Start time only: a span runs to the end of its last day, a single day gets one hour.
                 end = calendar.date(bySettingHour: 23, minute: 59, second: 0, of: lastDay) ?? start.addingTimeInterval(3600)
             } else {
                 end = start.addingTimeInterval(3600)
@@ -59,6 +64,14 @@ enum MirrorError: LocalizedError {
     case noAccess
     case calendarUnavailable
     case failed(String)
+
+    /// Every other write would fail the same way, so a batch ("모두 올리기") stops instead of going on.
+    var stopsBatch: Bool {
+        switch self {
+        case .noAccess, .calendarUnavailable: return true
+        case .failed: return false
+        }
+    }
 
     var errorDescription: String? {
         switch self {
